@@ -1,0 +1,15 @@
+name: ci
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  harness-loop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure scripts are executable
+        run: chmod +x scripts/*.sh skills/*/*.sh
+      - name: Run skill loop
+        run: scripts/run-skills.sh --mode ci --stage pr-check

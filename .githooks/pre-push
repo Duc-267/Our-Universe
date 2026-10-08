@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+set -eu
+
+scripts/run-skills.sh --mode local --stage pre-push

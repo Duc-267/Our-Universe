@@ -1,0 +1,4 @@
+# One entry per line: <pack>/<skill-name>
+core/requirements-check
+docs/architecture-check
+quality/dod-check

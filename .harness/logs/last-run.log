@@ -1,0 +1,14 @@
+run-skills mode=local stage=manual
+--- running core/requirements-check ---
+[core/requirements-check] verifying context files
+[core/requirements-check] ok
+--- passed core/requirements-check ---
+--- running docs/architecture-check ---
+[docs/architecture-check] verifying architecture notes
+[docs/architecture-check] ok
+--- passed docs/architecture-check ---
+--- running quality/dod-check ---
+[quality/dod-check] verifying requirement checklists
+[quality/dod-check] ok
+--- passed quality/dod-check ---
+summary: ran=3 failed=0 log=.harness/logs/last-run.log
