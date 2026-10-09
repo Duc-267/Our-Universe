@@ -8,7 +8,7 @@ jobs:
   app-checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -40,14 +40,14 @@ jobs:
       PGPASSWORD: test
       PGDATABASE: postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - run: bash scripts/test-db.sh
 
   harness-loop:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Ensure scripts are executable
         run: chmod +x scripts/*.sh skills/*/*.sh
       - name: Run skill loop
