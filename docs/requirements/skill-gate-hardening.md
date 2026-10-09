@@ -9,6 +9,7 @@ Tighten baseline validation so this boilerplate catches placeholder docs and unf
 - [x] `dod-check` ignores the template file and enforces zero unchecked DoD items in `pre-push`/`pr-check`.
 - [x] Architecture and agent overview docs are updated with concrete baseline content.
 - [x] Skill loop passes for `manual` and `ci` stages.
+- [x] The skill manifest is read correctly when a Windows checkout gives `skills/enabled.txt` CRLF line endings.
 
 ## Constraints
 - Required API/library: POSIX shell + existing repository scripts only.

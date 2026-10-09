@@ -35,8 +35,10 @@ echo "run-skills mode=$MODE stage=$STAGE" | tee -a "$LOG_FILE"
 
 failed=0
 ran=0
+cr="$(printf '\r')"
 
 while IFS= read -r line || [ -n "$line" ]; do
+  line="${line%"$cr"}"
   case "$line" in
     ""|\#*)
       continue
