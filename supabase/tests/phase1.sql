@@ -61,7 +61,7 @@ grant execute on function test.reject_create(uuid, text, date, text, smallint),
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
 
-select public.create_memory(:'couple_a', 'First evening walk', '2024-03-04', 'We walked along the river.', 'Riverside park', 'everyday', 5) as memory_walk \gset
+select public.create_memory(:'couple_a', 'First evening walk', '2024-03-04', 'We walked along the river.', 'Riverside park', 'everyday', 5::smallint) as memory_walk \gset
 select test.assert_true(
   (select count(*) = 1 from public.memories where id = :'memory_walk'),
   'memory created');
@@ -85,7 +85,7 @@ select test.assert_true(
 select position_x as before_x, position_y as before_y, position_z as before_z
 from public.cosmic_objects where memory_id = :'memory_walk' \gset
 
-select public.create_memory(:'couple_a', 'She said yes to the trip', '2025-12-24', null, 'Da Lat', 'special', 9) as memory_bright \gset
+select public.create_memory(:'couple_a', 'She said yes to the trip', '2025-12-24', null, 'Da Lat', 'special', 9::smallint) as memory_bright \gset
 select test.assert_true(
   (select object_type = 'BRIGHT_STAR' from public.cosmic_objects where memory_id = :'memory_bright'),
   'important memory renders a bright star');
@@ -101,7 +101,7 @@ select test.assert_true(
 select test.assert_true(
   (select count(*) = 2 from public.cosmic_objects where couple_id = :'couple_a'),
   'partner sees both stars');
-select test.reject_update(:'memory_walk', 'Changed by partner', '2024-03-04', 'everyday', 5);
+select test.reject_update(:'memory_walk', 'Changed by partner', '2024-03-04', 'everyday', 5::smallint);
 select test.reject_delete(:'memory_walk');
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000003', false);
@@ -114,12 +114,12 @@ select test.assert_true(
 select test.assert_true(
   (select count(*) = 0 from public.relationship_events where couple_id = :'couple_a'),
   'cross-couple event read denied');
-select test.reject_create(:'couple_a', 'Stolen star', '2024-03-04', 'everyday', 5);
-select test.reject_update(:'memory_walk', 'Stolen edit', '2024-03-04', 'everyday', 5);
+select test.reject_create(:'couple_a', 'Stolen star', '2024-03-04', 'everyday', 5::smallint);
+select test.reject_update(:'memory_walk', 'Stolen edit', '2024-03-04', 'everyday', 5::smallint);
 select test.reject_delete(:'memory_walk');
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
-select public.update_memory(:'memory_walk', 'First evening walk', '2024-03-05', 'We walked along the river at dusk.', 'Riverside park', 'special', 9);
+select public.update_memory(:'memory_walk', 'First evening walk', '2024-03-05', 'We walked along the river at dusk.', 'Riverside park', 'special', 9::smallint);
 select test.assert_true(
   (select object_type = 'BRIGHT_STAR' from public.cosmic_objects where memory_id = :'memory_walk'),
   'importance update promotes the star');
@@ -137,9 +137,9 @@ select test.assert_true(
    where event_type = 'MEMORY_CREATED' and source_entity_id = :'memory_walk'),
   'event date follows the memory');
 
-select test.reject_create(:'couple_a', '', '2024-03-04', 'everyday', 5);
-select test.reject_create(:'couple_a', 'Bad category', '2024-03-04', 'nonsense', 5);
-select test.reject_create(:'couple_a', 'Too important', '2024-03-04', 'everyday', 11);
+select test.reject_create(:'couple_a', '', '2024-03-04', 'everyday', 5::smallint);
+select test.reject_create(:'couple_a', 'Bad category', '2024-03-04', 'nonsense', 5::smallint);
+select test.reject_create(:'couple_a', 'Too important', '2024-03-04', 'everyday', 11::smallint);
 select test.assert_true(
   (select count(*) = 2 from public.memories where couple_id = :'couple_a'),
   'rejected creates leave no rows behind');
