@@ -37,4 +37,4 @@ supabase migration list
 supabase db push
 ```
 
-This project has automatic exposure of new tables disabled for the Data API. After applying the migration, expose `memories`, `relationship_events`, and `cosmic_objects` in the dashboard's Data API settings before using the Phase 1 screens against the live project; otherwise `/universe` cannot read them.
+Verified on 2026-10-12: after applying the migration, the Data API already serves all three tables — `GET /rest/v1/<table>` with the publishable key returns the 42501 privilege error for the anon role (table found, denied by design), not the PGRST205 "Could not find the table" error that missing or unexposed tables return. No dashboard exposure step is required; `/universe` reads these tables with the authenticated role.

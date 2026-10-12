@@ -48,7 +48,7 @@
 - Vercel is the intended Next.js deployment target. Supabase remains the authentication and primary data provider. This does not require Vercel-specific storage or auth products.
 - Memories, relationship events, and cosmic objects are couple-scoped with RLS select policies for active members. Authenticated clients hold no INSERT, UPDATE, or DELETE grants on them: every write goes through private security-definer functions that re-check membership and authorship inside the transaction.
 - `cosmic_objects.memory_id` is the Phase 1 star-to-memory reference, and a partial unique index enforces exactly one star per memory. Deleting a memory removes its star through the cascade and its relationship event in the same function call.
-- The development project's Data API does not automatically expose new tables (see `docs/deployment.md`); reads from `/universe` require exposing `memories`, `relationship_events`, and `cosmic_objects` after the migration is applied.
+- Data API exposure needs no dashboard step: tables created by migrations in the `public` schema are served by the Data API, verified on 2026-10-12 through the 42501-versus-PGRST205 response contrast against the live project (see `docs/deployment.md`).
 
 ## Decision records
 - 2026-07-13: Enforce stage-aware quality gates. `pre-push`/`pr-check` now require at least one non-template requirement and no unchecked DoD items in real requirement docs.
