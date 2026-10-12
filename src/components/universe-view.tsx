@@ -1,0 +1,211 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { useActionState } from "react";
+import type { RelationshipAge } from "@/features/couple/age";
+import { deleteMemory, type DeleteMemoryState } from "@/features/memory/actions";
+import { UniverseScene, type SceneStar } from "./universe-scene";
+
+export type UniverseMemory = {
+  id: string;
+  title: string;
+  memoryDate: string;
+  description: string | null;
+  locationText: string | null;
+  category: string;
+  importance: number;
+  authorName: string;
+  isAuthor: boolean;
+  star: {
+    type: "STAR" | "BRIGHT_STAR";
+    positionX: number;
+    positionY: number;
+    positionZ: number;
+    scale: number;
+    brightness: number;
+    rotation: number;
+    visualSeed: number;
+  } | null;
+};
+
+type Props = {
+  memories: UniverseMemory[];
+  age: RelationshipAge;
+  canInvite: boolean;
+  initialSelectedId: string | null;
+};
+
+const initialDeleteState: DeleteMemoryState = { ok: false, error: null };
+
+function formatDate(iso: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${iso}T00:00:00Z`));
+}
+
+function ageLine(age: RelationshipAge): string {
+  const days = age.daysTogether.toLocaleString("en-US");
+  if (!age.nextAnniversary) return `${days} days together`;
+  if (age.nextAnniversary.daysAway === 0) {
+    const years = age.nextAnniversary.number;
+    return `${days} days together — happy anniversary, ${years} ${years === 1 ? "year" : "years"} today`;
+  }
+  const daysAway = age.nextAnniversary.daysAway;
+  return `${days} days together · next anniversary in ${daysAway} ${daysAway === 1 ? "day" : "days"}`;
+}
+
+export function UniverseView({ memories, age, canInvite, initialSelectedId }: Props) {
+  const [selectedId, setSelectedId] = useState(initialSelectedId);
+  const [seenInitialId, setSeenInitialId] = useState(initialSelectedId);
+
+  // Adjust state during render when a navigation supplies a new ?star= target,
+  // so a freshly created or edited memory opens its dialog without an effect.
+  if (initialSelectedId !== seenInitialId) {
+    setSeenInitialId(initialSelectedId);
+    if (initialSelectedId) setSelectedId(initialSelectedId);
+  }
+
+  const selected = memories.find((memory) => memory.id === selectedId) ?? null;
+
+  const closeDetail = () => {
+    setSelectedId(null);
+    if (window.location.search.includes("star=")) {
+      window.history.replaceState(null, "", "/universe");
+    }
+  };
+
+  const sceneStars: SceneStar[] = memories
+    .filter((memory) => memory.star !== null)
+    .map((memory) => ({
+      memoryId: memory.id,
+      title: memory.title,
+      positionX: memory.star!.positionX,
+      positionY: memory.star!.positionY,
+      positionZ: memory.star!.positionZ,
+      scale: memory.star!.scale,
+      brightness: memory.star!.brightness,
+      rotation: memory.star!.rotation,
+      visualSeed: memory.star!.visualSeed,
+      bright: memory.star!.type === "BRIGHT_STAR",
+    }));
+
+  return (
+    <div className="universe-shell">
+      <h1 className="sr-only">Your universe</h1>
+      <div className="universe-toolbar">
+        <p className="universe-age">{ageLine(age)}</p>
+        <Link className="primary-button universe-add" href="/memory/new">Add a memory</Link>
+      </div>
+      <UniverseScene stars={sceneStars} selectedId={selectedId} onSelect={setSelectedId} />
+      {memories.length === 0 ? (
+        <section className="universe-empty-overlay" aria-labelledby="universe-title">
+          <div className="universe-empty-card">
+            <h2 id="universe-title">Your universe begins here.</h2>
+            {canInvite ? (
+              <Link className="primary-button universe-action" href="/couple/invite">Invite your partner</Link>
+            ) : (
+              <p className="universe-note">A quiet place for the moments you will share.</p>
+            )}
+          </div>
+        </section>
+      ) : (
+        <section className="universe-list" aria-labelledby="universe-stars-heading">
+          <h2 id="universe-stars-heading">Our stars</h2>
+          <p className="universe-count">
+            {memories.length === 1 ? "1 memory" : `${memories.length} memories`} shining in your universe.
+          </p>
+          <ul className="star-list">
+            {memories.map((memory) => (
+              <li key={memory.id}>
+                <button
+                  type="button"
+                  className="star-option"
+                  aria-current={memory.id === selectedId ? "true" : undefined}
+                  onClick={() => setSelectedId(memory.id)}
+                >
+                  <span className="star-option-title">{memory.title}</span>
+                  <span className="star-option-meta">
+                    {formatDate(memory.memoryDate)} · {memory.category}
+                    {memory.star?.type === "BRIGHT_STAR" ? " · bright star" : ""}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {selected && <MemoryDialog memory={selected} onClose={closeDetail} />}
+    </div>
+  );
+}
+
+function MemoryDialog({ memory, onClose }: { memory: UniverseMemory; onClose: () => void }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [state, formAction, pending] = useActionState(deleteMemory, initialDeleteState);
+  const [confirming, setConfirming] = useState(false);
+
+  useEffect(() => {
+    dialogRef.current?.showModal();
+  }, []);
+
+  useEffect(() => {
+    if (state.ok) onClose();
+  }, [state.ok, onClose]);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="memory-dialog"
+      aria-labelledby="memory-dialog-title"
+      onClose={onClose}
+      onClick={(event) => {
+        if (event.target === dialogRef.current) onClose();
+      }}
+    >
+      <article className="memory-dialog-body">
+        <div className="memory-dialog-head">
+          <h2 id="memory-dialog-title">{memory.title}</h2>
+          <button type="button" className="text-button" onClick={() => dialogRef.current?.close()}>
+            Close
+          </button>
+        </div>
+        <p className="memory-dialog-meta">
+          {formatDate(memory.memoryDate)} · saved by {memory.authorName} · {memory.category}
+        </p>
+        <p className="memory-dialog-importance">
+          Importance {memory.importance}/10
+          {memory.star?.type === "BRIGHT_STAR" ? " · shines as a bright star" : ""}
+        </p>
+        {memory.description && <p className="memory-dialog-description">{memory.description}</p>}
+        {memory.locationText && (
+          <p className="memory-dialog-location">Location: {memory.locationText}</p>
+        )}
+        {memory.isAuthor && (
+          <div className="memory-dialog-actions">
+            <Link className="text-button" href={`/memory/${memory.id}/edit`}>Edit memory</Link>
+            {confirming ? (
+              <form action={formAction}>
+                <input type="hidden" name="memory_id" value={memory.id} />
+                <button type="submit" className="text-button danger-button" disabled={pending}>
+                  {pending ? "Deleting…" : "Confirm delete"}
+                </button>
+                <button type="button" className="text-button" onClick={() => setConfirming(false)}>
+                  Keep it
+                </button>
+              </form>
+            ) : (
+              <button type="button" className="text-button danger-button" onClick={() => setConfirming(true)}>
+                Delete memory
+              </button>
+            )}
+          </div>
+        )}
+        {state.error && <p className="form-error" role="alert">{state.error}</p>}
+      </article>
+    </dialog>
+  );
+}

@@ -1,6 +1,6 @@
 # Our Universe
 
-This repository contains the Our Universe product specification, a requirement-first development harness, and the Phase 0 application in `src/app`. Phase 0 behavior is tracked in `docs/requirements/phase-0-foundation.md`; database and live authentication checks still require a configured Supabase project.
+This repository contains the Our Universe product specification, a requirement-first development harness, and the Phase 0–1 application in `src/app`. Phase 0 behavior is tracked in `docs/requirements/phase-0-foundation.md` and Phase 1 (universe and memories) in `docs/requirements/phase-1-universe-memories.md`; database and live authentication checks still require a configured Supabase project.
 
 ## Application scaffold
 

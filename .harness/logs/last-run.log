@@ -1,4 +1,4 @@
-run-skills mode=local stage=manual
+run-skills mode=local stage=pr-check
 --- running core/requirements-check ---
 [core/requirements-check] verifying context files
 [core/requirements-check] ok
