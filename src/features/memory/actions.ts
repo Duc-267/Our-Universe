@@ -3,18 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { currentCoupleId, requireUser } from "@/lib/auth";
-
-export const MEMORY_CATEGORIES = [
-  "everyday",
-  "date",
-  "trip",
-  "funny",
-  "special",
-  "difficult",
-  "random",
-] as const;
-
-export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
+import { MEMORY_CATEGORIES } from "./categories";
 
 export type MemoryFormState = { error: string | null };
 export type DeleteMemoryState = { ok: boolean; error: string | null };

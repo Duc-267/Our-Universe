@@ -1,12 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import {
-  createMemory,
-  updateMemory,
-  MEMORY_CATEGORIES,
-  type MemoryFormState,
-} from "@/features/memory/actions";
+import { createMemory, updateMemory, type MemoryFormState } from "@/features/memory/actions";
+import { MEMORY_CATEGORIES } from "@/features/memory/categories";
 
 const initialState: MemoryFormState = { error: null };
 const IMPORTANCE_CHOICES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
