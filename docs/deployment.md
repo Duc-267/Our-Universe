@@ -27,3 +27,14 @@ supabase migration list
 `migration repair` updated history only; it did not re-run the SQL. See the [Supabase migration guidance](https://supabase.com/docs/guides/deployment/database-migrations#diagnosing-and-fixing-sync-errors).
 
 For later schema changes, add a new versioned migration and apply it through the CLI so history stays in sync. Do not re-run the initial migration on this project.
+
+## Phase 1 migration
+
+`supabase/migrations/20261011145341_phase1_universe_memories.sql` adds `memories`, `relationship_events`, and `cosmic_objects` with their RLS policies and private functions. Verify history, then apply it through the CLI so the recorded history stays in sync:
+
+```sh
+supabase migration list
+supabase db push
+```
+
+This project has automatic exposure of new tables disabled for the Data API. After applying the migration, expose `memories`, `relationship_events`, and `cosmic_objects` in the dashboard's Data API settings before using the Phase 1 screens against the live project; otherwise `/universe` cannot read them.
