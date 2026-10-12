@@ -49,8 +49,7 @@ button:disabled { cursor: wait; opacity: 0.65; }
 .form-error { border: 1px solid #9d5858; background: #321b29; color: var(--danger); }
 .form-success { border: 1px solid #477f6a; background: #123227; color: #c4f4dd; }
 
-.universe-page { position: relative; min-height: 100vh; background: #070e1e url("/universe-background.png") center top / cover no-repeat; }
-.universe-page::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(3, 7, 17, 0.35) 0%, transparent 38%, rgba(3, 7, 17, 0.3) 100%); }
+.universe-page { position: relative; min-height: 100vh; background: #070e1e; }
 .app-header { position: relative; z-index: 1; min-height: 4.5rem; display: flex; align-items: center; gap: 2rem; padding: 0.7rem clamp(1.3rem, 3.5vw, 4rem); border-bottom: 1px solid rgba(232, 223, 221, 0.12); background: rgba(4, 9, 20, 0.45); }
 .header-couple { color: var(--text); border-left: 1px solid var(--line); padding-left: 2rem; white-space: nowrap; }
 .header-nav { display: flex; align-items: center; gap: 1.5rem; margin-left: auto; }
@@ -130,7 +129,6 @@ button:disabled { cursor: wait; opacity: 0.65; }
   .app-header { gap: 0.8rem; flex-wrap: wrap; }
   .header-couple { display: none; }
   .header-nav { gap: 0.9rem; font-size: 0.9rem; }
-  .universe-page { background-position: center 1.5rem; }
   .universe-toolbar { padding-top: 0.8rem; }
   .universe-add { margin-left: 0; }
   .universe-scene { min-height: 52vh; }
