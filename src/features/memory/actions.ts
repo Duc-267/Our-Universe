@@ -88,6 +88,7 @@ export async function createMemory(
     p_importance: parsed.values.importance,
   });
   if (error || typeof data !== "string") {
+    console.error("create_memory failed:", error?.message ?? "unexpected rpc result");
     return { error: "Could not save this memory. Please try again." };
   }
 
@@ -121,6 +122,7 @@ export async function updateMemory(
     p_importance: parsed.values.importance,
   });
   if (error) {
+    console.error("update_memory failed:", error.message);
     return { error: "Could not save these changes. Please try again." };
   }
 
@@ -142,6 +144,7 @@ export async function deleteMemory(
 
   const { error } = await supabase.rpc("delete_memory", { p_memory_id: memoryId });
   if (error) {
+    console.error("delete_memory failed:", error.message);
     return { ok: false, error: "Could not delete this memory. Please try again." };
   }
 
