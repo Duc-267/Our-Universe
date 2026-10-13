@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
 import { UniverseView, type UniverseMemory } from "@/components/universe-view";
-import { computeRelationshipAge } from "@/features/couple/age";
+import { todayInZone, computeRelationshipAge } from "@/features/couple/age";
+import { weatherFromMood } from "@/features/checkin/weather";
 import { currentCoupleId, requireUser } from "@/lib/auth";
 
 export default async function UniversePage({
@@ -13,7 +14,7 @@ export default async function UniversePage({
   const coupleId = await currentCoupleId(supabase, userId);
   if (!coupleId) redirect("/couple/new");
 
-  const [couple, settings, members, memories, objects] = await Promise.all([
+  const [couple, settings, members, memories, objects, checkins] = await Promise.all([
     supabase
       .from("couples")
       .select("name, created_by, relationship_start_date")
@@ -36,13 +37,20 @@ export default async function UniversePage({
       )
       .eq("couple_id", coupleId)
       .in("object_type", ["STAR", "BRIGHT_STAR"]),
+    supabase
+      .from("daily_checkins")
+      .select("id, author_user_id, local_date, mood, note, updated_at")
+      .eq("couple_id", coupleId)
+      .order("local_date", { ascending: false })
+      .order("updated_at", { ascending: false }),
   ]);
   if (
     couple.error ||
     settings.error ||
     members.error ||
     memories.error ||
-    objects.error
+    objects.error ||
+    checkins.error
   ) {
     throw new Error("Could not load your universe.");
   }
@@ -84,6 +92,10 @@ export default async function UniversePage({
     };
   });
 
+  const today = todayInZone(settings.data.timezone);
+  const todaysMoods = checkins.data
+    .filter((row) => row.local_date === today)
+    .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
   const age = computeRelationshipAge(couple.data.relationship_start_date, settings.data.timezone);
   const canInvite = couple.data.created_by === userId && members.data.length < 2;
   const { star } = await searchParams;
@@ -92,10 +104,24 @@ export default async function UniversePage({
     <main className="universe-page">
       <AppHeader coupleName={couple.data.name} />
       <UniverseView
+        coupleId={coupleId}
         memories={universeMemories}
         age={age}
         canInvite={canInvite}
         initialSelectedId={star ?? null}
+        today={today}
+        weather={weatherFromMood(todaysMoods[0]?.mood ?? null)}
+        checkins={checkins.data.map((row) => ({
+          id: row.id,
+          authorUserId: row.author_user_id,
+          authorName:
+            nameByUser.get(row.author_user_id) ||
+            (row.author_user_id === userId ? "You" : "Your partner"),
+          localDate: row.local_date,
+          mood: row.mood,
+          note: row.note,
+          isMine: row.author_user_id === userId,
+        }))}
       />
     </main>
   );

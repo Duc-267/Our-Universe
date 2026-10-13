@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
+import { CheckInPanel, type CheckinRow } from "@/components/check-in-panel";
 import type { RelationshipAge } from "@/features/couple/age";
+import type { SkyWeather } from "@/features/checkin/weather";
 import { deleteMemory, type DeleteMemoryState } from "@/features/memory/actions";
 import { memoryIcon } from "@/features/memory/icons";
+import { createClient } from "@/lib/supabase/client";
 import { UniverseScene, type SceneStar } from "./universe-scene";
 
 export type UniverseMemory = {
@@ -32,10 +36,14 @@ export type UniverseMemory = {
 };
 
 type Props = {
+  coupleId: string;
   memories: UniverseMemory[];
   age: RelationshipAge;
   canInvite: boolean;
   initialSelectedId: string | null;
+  today: string;
+  checkins: CheckinRow[];
+  weather: SkyWeather;
 };
 
 const initialDeleteState: DeleteMemoryState = { ok: false, error: null };
@@ -98,9 +106,21 @@ function categoryLabel(category: string): string {
   return category.charAt(0).toUpperCase() + category.slice(1);
 }
 
-export function UniverseView({ memories, age, canInvite, initialSelectedId }: Props) {
+export function UniverseView({
+  coupleId,
+  memories,
+  age,
+  canInvite,
+  initialSelectedId,
+  today,
+  checkins,
+  weather,
+}: Props) {
+  const router = useRouter();
   const [selectedId, setSelectedId] = useState(initialSelectedId);
   const [seenInitialId, setSeenInitialId] = useState(initialSelectedId);
+  const [bornId, setBornId] = useState<string | null>(initialSelectedId);
+  const knownIds = useRef<Set<string> | null>(null);
 
   // Adjust state during render when a navigation supplies a new ?star= target,
   // so a freshly created or edited memory opens its dialog without an effect.
@@ -108,6 +128,41 @@ export function UniverseView({ memories, age, canInvite, initialSelectedId }: Pr
     setSeenInitialId(initialSelectedId);
     if (initialSelectedId) setSelectedId(initialSelectedId);
   }
+
+  useEffect(() => {
+    const ids = memories.map((memory) => memory.id);
+    if (knownIds.current) {
+      const fresh = ids.find((id) => !knownIds.current?.has(id));
+      if (fresh) setBornId(fresh);
+    }
+    knownIds.current = new Set(ids);
+  }, [memories]);
+
+  useEffect(() => {
+    if (!bornId) return;
+    const timer = window.setTimeout(() => setBornId(null), 1400);
+    return () => window.clearTimeout(timer);
+  }, [bornId]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`universe-${coupleId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "cosmic_objects", filter: `couple_id=eq.${coupleId}` },
+        () => router.refresh(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "daily_checkins", filter: `couple_id=eq.${coupleId}` },
+        () => router.refresh(),
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [coupleId, router]);
 
   const selected = memories.find((memory) => memory.id === selectedId) ?? null;
   const isAnniversary = age.nextAnniversary?.daysAway === 0;
@@ -146,7 +201,14 @@ export function UniverseView({ memories, age, canInvite, initialSelectedId }: Pr
         </p>
         <Link className="primary-button universe-add" href="/memory/new">Add a memory</Link>
       </div>
-      <UniverseScene stars={sceneStars} selectedId={selectedId} onSelect={setSelectedId} />
+      <CheckInPanel today={today} checkins={checkins} />
+      <UniverseScene
+        stars={sceneStars}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        weather={weather}
+        bornId={bornId}
+      />
       {memories.length === 0 ? (
         <section className="universe-empty-overlay" aria-labelledby="universe-title">
           <div className="universe-empty-card">

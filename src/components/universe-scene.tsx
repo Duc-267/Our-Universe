@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import type { SkyWeather } from "@/features/checkin/weather";
 import { paintMemoryIcon } from "@/features/memory/icons";
 
 export type SceneStar = {
@@ -22,6 +23,8 @@ type Props = {
   stars: SceneStar[];
   selectedId: string | null;
   onSelect: (memoryId: string | null) => void;
+  weather: SkyWeather;
+  bornId: string | null;
 };
 
 const MIN_DIST = 115;
@@ -148,11 +151,13 @@ function paintBackdrop(target: HTMLCanvasElement, width: number, height: number)
   }
 }
 
-export function UniverseScene({ stars, selectedId, onSelect }: Props) {
+export function UniverseScene({ stars, selectedId, onSelect, weather, bornId }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const starsRef = useRef(stars);
   const selectedRef = useRef(selectedId);
   const selectRef = useRef(onSelect);
+  const weatherRef = useRef(weather);
+  const bornRef = useRef(bornId);
   const apiRef = useRef<{ zoomIn: () => void; zoomOut: () => void; reset: () => void } | null>(
     null,
   );
@@ -160,6 +165,8 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
     starsRef.current = stars;
     selectedRef.current = selectedId;
     selectRef.current = onSelect;
+    weatherRef.current = weather;
+    bornRef.current = bornId;
   });
 
   useEffect(() => {
@@ -413,12 +420,22 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
           ctx.stroke();
         }
 
+        if (star.memoryId === bornRef.current && !reducedMotion.matches) {
+          const pulse = 0.5 + 0.5 * Math.sin(time / 180);
+          ctx.strokeStyle = `rgba(255, 236, 196, ${0.35 + pulse * 0.4})`;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(x, y, r * (0.9 + pulse * 0.45), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
         if (star.memoryId === hoverId) drawLabel(x, y - r, star.title);
       }
     };
 
     const drawDust = (far: boolean, planetDepth: number, time: number) => {
-      const drift = reducedMotion.matches ? 0 : time / 9000;
+      const speed = weatherRef.current === "restless" ? 2.4 : weatherRef.current === "still" ? 0.35 : 1;
+      const drift = reducedMotion.matches ? 0 : (time / 9000) * speed;
       for (const mote of dust) {
         const spin = mote.spin + drift;
         const point = projectPoint(
@@ -433,7 +450,8 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
         if (isFar !== far) continue;
         if (mote.heart) {
           const size = Math.max(3.2, (mote.size * focal()) / point.depth);
-          paintHeart(point.x, point.y, size, mote.hue, mote.alpha);
+          const quiet = weatherRef.current === "still" ? 0.35 : 1;
+          paintHeart(point.x, point.y, size, mote.hue, mote.alpha * quiet);
         } else {
           const sprite = glowSprites.get(mote.hue);
           const radius = Math.max(1.2, (mote.size * focal()) / point.depth);
@@ -461,6 +479,23 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
       drawBackground();
+      const sky = weatherRef.current;
+      if (sky === "warm" || sky === "tender" || sky === "rain") {
+        ctx.fillStyle = sky === "rain" ? "rgba(120, 146, 186, 0.14)" : sky === "tender" ? "rgba(255, 150, 186, 0.12)" : "rgba(255, 170, 110, 0.12)";
+        ctx.fillRect(0, 0, width, height);
+      }
+      if (sky === "rain" && !reducedMotion.matches) {
+        ctx.strokeStyle = "rgba(210, 224, 245, 0.28)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 18; i += 1) {
+          const x = ((i * 97 + time / 18) % width);
+          const y = ((i * 53 + time / 8) % height);
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x - 3, y + 10);
+          ctx.stroke();
+        }
+      }
 
       const planetPoint = projectPoint(0, 0, 0, 1, 0);
       const planetDepth = planetPoint?.depth ?? cam.dist;

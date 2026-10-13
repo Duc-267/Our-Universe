@@ -33,6 +33,7 @@ try {
   await database.exec(readFileSync("supabase/migrations/20261008000100_phase0_foundation.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261011145341_phase1_universe_memories.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261013231000_memory_icons.sql", "utf8"));
+  await database.exec(readFileSync("supabase/migrations/20261013233000_phase2_checkins.sql", "utf8"));
   await query("insert into public.profiles (id, display_name) select id, raw_user_meta_data ->> 'display_name' from auth.users");
   await query(
     "insert into auth.users(id, raw_user_meta_data) values ($1, $2::jsonb)",
@@ -274,6 +275,28 @@ try {
   );
   assert.equal((await query("select count(*)::int as n from public.cosmic_objects where memory_id = $1", [memoryBright]))[0].n, 0);
   assert.equal((await query("select count(*)::int as n from public.cosmic_objects where memory_id = $1", [memoryWalk]))[0].n, 1);
+
+  await asUser(userIds.alex);
+  const [{ save_checkin: checkinId }] = await query("select public.save_checkin($1, $2)", ["calm", "Quiet morning"]);
+  const [{ save_checkin: checkinAgain }] = await query("select public.save_checkin($1, $2)", ["happy", "Better now"]);
+  assert.equal(checkinAgain, checkinId);
+  assert.equal((await query("select count(*)::int as n from public.daily_checkins where author_user_id = $1", [userIds.alex]))[0].n, 1);
+  assert.equal((await query("select mood from public.daily_checkins where id = $1", [checkinId]))[0].mood, "happy");
+  await rejected(
+    () => query("select public.save_checkin($1, $2)", ["furious", null]),
+    "unknown mood rejected",
+  );
+  await asUser(userIds.blair);
+  assert.equal((await query("select count(*)::int as n from public.daily_checkins where couple_id = $1", [coupleA]))[0].n, 1);
+  await asUser(userIds.casey);
+  assert.equal((await query("select count(*)::int as n from public.daily_checkins where couple_id = $1", [coupleA]))[0].n, 0);
+  await rejected(
+    () => query(
+      "insert into public.daily_checkins (couple_id, author_user_id, local_date, mood) values ($1, $2, '2024-01-01', 'calm')",
+      [coupleA, userIds.casey],
+    ),
+    "direct check-in insert must fail",
+  );
 
   await asOwner();
   assert.equal(

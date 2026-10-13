@@ -70,6 +70,24 @@ button:disabled { cursor: wait; opacity: 0.65; }
 .header-nav a:hover, .text-button:hover { text-decoration: underline; text-underline-offset: 0.2em; }
 .universe-shell { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: calc(100vh - 4.5rem); }
 .universe-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; padding: 1rem clamp(1.3rem, 3.5vw, 4rem) 0.6rem; }
+.checkin-panel { padding: 0 clamp(1.3rem, 3.5vw, 4rem) 0.4rem; }
+.checkin-today { display: grid; gap: 0.55rem; padding: 0.85rem 1rem; border: 1px solid var(--line); border-radius: 1rem; background: rgba(32, 18, 41, 0.55); }
+.checkin-today h2 { margin: 0; font-size: 1.15rem; }
+.checkin-partner { margin: 0; color: var(--muted); font-size: 0.92rem; }
+.checkin-form { display: grid; gap: 0.55rem; }
+.mood-picker { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0; padding: 0; border: 0; }
+.mood-option { display: inline-flex; }
+.mood-option input { position: absolute; opacity: 0; pointer-events: none; }
+.mood-option span { display: inline-flex; align-items: center; min-height: 2.4rem; padding: 0.25rem 0.75rem; border: 1px solid var(--line); border-radius: 3rem; color: var(--text); }
+.mood-option input:checked + span { border-color: var(--accent); color: var(--starlight); }
+.mood-option input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 3px; }
+.checkin-form input[type="text"], .checkin-form input:not([type="radio"]) { min-height: 2.8rem; width: 100%; padding: 0.55rem 0.8rem; border: 1px solid var(--line); border-radius: 0.7rem; color: var(--text); background: rgba(21, 12, 32, 0.45); }
+.checkin-save { min-height: 2.8rem; width: fit-content; padding: 0.4rem 1.2rem; }
+.checkin-history { margin-top: 0.55rem; color: var(--muted); }
+.checkin-history summary { cursor: pointer; }
+.checkin-history ul { display: grid; gap: 0.35rem; margin: 0.6rem 0 0; padding: 0; list-style: none; }
+.checkin-history li { display: flex; flex-wrap: wrap; gap: 0.45rem 0.8rem; }
+.checkin-note { color: var(--text); }
 .universe-age-chip { display: inline-flex; align-items: center; gap: 0.55rem; margin: 0; padding: 0.5rem 1.05rem; border: 1px solid var(--line); border-radius: 3rem; background: rgba(32, 18, 41, 0.6); color: var(--text); font-size: 0.95rem; }
 .universe-age-chip svg { width: 1rem; height: 1rem; flex: none; color: var(--accent); }
 .universe-age-chip.is-anniversary { border-color: rgba(255, 217, 168, 0.55); }

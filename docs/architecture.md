@@ -17,6 +17,10 @@
 - The scene supports pointer, touch, and keyboard camera controls, and the page keeps a semantic, keyboard-operable star list and native detail dialog for accessibility. `prefers-reduced-motion` disables idle drift and twinkle.
 - Relationship age and the next-anniversary countdown derive from the couple's relationship start date interpreted in the configured IANA timezone.
 
+### Application (Phase 2)
+- A daily check-in is one row per member per local date. `private.save_checkin` computes that date from `now()` in the couple timezone and upserts the mood and optional note. The most recently updated check-in from today tints the canvas; no check-in leaves the sky unchanged. The tint is not a relationship score.
+- `/universe` subscribes to Supabase realtime changes on `cosmic_objects` and `daily_checkins` for the couple and refreshes the server render. A failed subscription still leaves the saved rows visible after reload. A star that appears after the first paint, including one opened with `?star=`, plays a short birth ring unless reduced motion is requested.
+
 ## Core modules
 - `scripts/run-skills.sh`: reads `skills/enabled.txt`, executes each skill script, and aggregates failures into a single exit code.
 - `skills/*/*.sh`: small, composable validation units for requirements presence, architecture quality, and DoD completeness.
@@ -63,3 +67,4 @@
 - 2026-10-12: Keep memory creation, update, and deletion in private schema functions so the memory, its relationship event, and its star stay consistent in one transaction; direct table writes stay revoked from authenticated clients.
 - 2026-10-13: Enrich the Phase 1 sky on the existing canvas projector — painted nebula, a depth-split ring, and category hues — instead of adopting React Three Fiber now. The projector, hit testing, and reduced-motion behavior stay shared so later cosmic objects can be new draw passes. React Three Fiber remains the path when moons, trip planets, or constellation geometry need real meshes.
 - 2026-10-13: Each memory star is drawn as a chosen icon, stored on `memories.icon`. Omitting the icon uses the category default. The allow-list lives in the database check and in `private.resolve_memory_icon`, so a client cannot invent a glyph.
+- 2026-10-13: Daily check-ins are couple-scoped rows with the calendar day decided in the database. Emotional weather reads only today's latest mood. Realtime is a refresh signal, not a second source of truth. Same Moment remains a later phase.
