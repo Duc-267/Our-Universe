@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { currentCoupleId, requireUser } from "@/lib/auth";
 import { MEMORY_CATEGORIES } from "./categories";
+import { isMemoryIcon } from "./icons";
 
 export type MemoryFormState = { error: string | null };
 export type DeleteMemoryState = { ok: boolean; error: string | null };
@@ -22,6 +23,7 @@ type ParsedMemory = {
   locationText: string | null;
   category: string;
   importance: number;
+  icon: string | null;
 };
 
 function parseMemory(formData: FormData): { values?: ParsedMemory; error?: string } {
@@ -31,6 +33,7 @@ function parseMemory(formData: FormData): { values?: ParsedMemory; error?: strin
   const locationText = field(formData, "location_text");
   const category = field(formData, "category");
   const importance = Number(field(formData, "importance"));
+  const icon = field(formData, "icon");
 
   if (!title || title.length > 120) {
     return { error: "Give this memory a title of up to 120 characters." };
@@ -54,6 +57,9 @@ function parseMemory(formData: FormData): { values?: ParsedMemory; error?: strin
   if (!Number.isInteger(importance) || importance < 1 || importance > 10) {
     return { error: "Importance must be between 1 and 10." };
   }
+  if (icon && !isMemoryIcon(icon)) {
+    return { error: "Choose one of the star icons." };
+  }
   return {
     values: {
       title,
@@ -62,6 +68,7 @@ function parseMemory(formData: FormData): { values?: ParsedMemory; error?: strin
       locationText: locationText || null,
       category,
       importance,
+      icon: icon || null,
     },
   };
 }
@@ -86,6 +93,7 @@ export async function createMemory(
     p_location_text: parsed.values.locationText,
     p_category: parsed.values.category,
     p_importance: parsed.values.importance,
+    p_icon: parsed.values.icon,
   });
   if (error || typeof data !== "string") {
     console.error("create_memory failed:", error?.message ?? "unexpected rpc result");
@@ -120,6 +128,7 @@ export async function updateMemory(
     p_location_text: parsed.values.locationText,
     p_category: parsed.values.category,
     p_importance: parsed.values.importance,
+    p_icon: parsed.values.icon,
   });
   if (error) {
     console.error("update_memory failed:", error.message);

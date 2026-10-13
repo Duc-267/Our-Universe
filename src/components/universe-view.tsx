@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
 import type { RelationshipAge } from "@/features/couple/age";
 import { deleteMemory, type DeleteMemoryState } from "@/features/memory/actions";
+import { memoryIcon } from "@/features/memory/icons";
 import { UniverseScene, type SceneStar } from "./universe-scene";
 
 export type UniverseMemory = {
@@ -15,6 +16,7 @@ export type UniverseMemory = {
   locationText: string | null;
   category: string;
   importance: number;
+  icon: string;
   authorName: string;
   isAuthor: boolean;
   star: {
@@ -52,10 +54,11 @@ function HeartIcon() {
   );
 }
 
-function SparkIcon({ bright }: { bright: boolean }) {
+function StarGlyph({ id, bright }: { id: string; bright: boolean }) {
+  const icon = memoryIcon(id);
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={bright ? "star-spark-bright" : "star-spark-dim"}>
-      <path d="M12 2.6c.6 5 3.4 7.8 8.4 8.4-5 .6-7.8 3.4-8.4 8.4-.6-5-3.4-7.8-8.4-8.4 5-.6 7.8-3.4 8.4-8.4z" />
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={bright ? "star-spark-bright" : "star-spark-dim"}>
+      <path d={icon.d} fill="currentColor" fillRule={icon.evenodd ? "evenodd" : "nonzero"} />
     </svg>
   );
 }
@@ -130,6 +133,7 @@ export function UniverseView({ memories, age, canInvite, initialSelectedId }: Pr
       visualSeed: memory.star!.visualSeed,
       bright: memory.star!.type === "BRIGHT_STAR",
       category: memory.category,
+      icon: memory.icon,
     }));
 
   return (
@@ -171,7 +175,7 @@ export function UniverseView({ memories, age, canInvite, initialSelectedId }: Pr
                   onClick={() => setSelectedId(memory.id)}
                 >
                   <span className="star-option-title">
-                    <SparkIcon bright={memory.star?.type === "BRIGHT_STAR"} />
+                    <StarGlyph id={memory.icon} bright={memory.star?.type === "BRIGHT_STAR"} />
                     {memory.title}
                   </span>
                   <span className="star-option-meta">
@@ -226,6 +230,7 @@ function MemoryDialog({ memory, onClose }: { memory: UniverseMemory; onClose: ()
           <span className="memory-chip">{categoryLabel(memory.category)}</span>
           <span className="memory-chip">Importance {memory.importance}/10</span>
           {memory.star?.type === "BRIGHT_STAR" && <span className="memory-chip is-bright">Bright star</span>}
+          <span className="memory-chip">{memoryIcon(memory.icon).label}</span>
         </div>
         {memory.description && <p className="memory-dialog-description">{memory.description}</p>}
         {memory.locationText && (

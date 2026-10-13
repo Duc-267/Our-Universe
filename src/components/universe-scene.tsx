@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { paintMemoryIcon } from "@/features/memory/icons";
 
 export type SceneStar = {
   memoryId: string;
@@ -14,6 +15,7 @@ export type SceneStar = {
   visualSeed: number;
   bright: boolean;
   category: string;
+  icon: string;
 };
 
 type Props = {
@@ -241,7 +243,7 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
         x: point.x,
         y: point.y,
         depth: point.depth,
-        r: Math.max(1.6, star.scale * 1.15 * (f / point.depth)),
+        r: Math.max(13, star.scale * 4.2 * (f / point.depth)),
       };
     };
 
@@ -395,30 +397,19 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
           ctx.drawImage(sprite, x - glowRadius, y - glowRadius, glowRadius * 2, glowRadius * 2);
           ctx.globalAlpha = 1;
         }
-        ctx.fillStyle = star.bright ? `rgba(255, 248, 236, ${alpha})` : hue.core;
-        ctx.globalAlpha = alpha;
+        ctx.globalAlpha = alpha * 0.9;
+        ctx.fillStyle = `rgba(${hue.glow}, 0.34)`;
         ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.arc(x, y, r * 0.72, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
-
-        if (star.bright) {
-          ctx.strokeStyle = `rgba(${hue.glow}, ${alpha * 0.85})`;
-          ctx.lineWidth = 1.25;
-          const spike = r * 3.1;
-          ctx.beginPath();
-          ctx.moveTo(x - spike, y);
-          ctx.lineTo(x + spike, y);
-          ctx.moveTo(x, y - spike);
-          ctx.lineTo(x, y + spike);
-          ctx.stroke();
-        }
+        paintMemoryIcon(ctx, star.icon, x, y, r * 1.35, star.bright ? "#fff8ee" : hue.core);
 
         if (star.memoryId === selectedRef.current) {
           ctx.strokeStyle = "rgba(255, 226, 170, 0.95)";
           ctx.lineWidth = 1.6;
           ctx.beginPath();
-          ctx.arc(x, y, r + 7, 0, Math.PI * 2);
+          ctx.arc(x, y, r * 0.82, 0, Math.PI * 2);
           ctx.stroke();
         }
 

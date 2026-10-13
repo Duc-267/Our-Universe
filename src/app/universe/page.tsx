@@ -24,7 +24,7 @@ export default async function UniversePage({
     supabase
       .from("memories")
       .select(
-        "id, title, memory_date, description, location_text, category, importance, author_user_id",
+        "id, title, memory_date, description, location_text, category, importance, icon, author_user_id",
       )
       .eq("couple_id", coupleId)
       .order("memory_date", { ascending: false })
@@ -64,6 +64,7 @@ export default async function UniversePage({
       locationText: memory.location_text,
       category: memory.category,
       importance: memory.importance,
+      icon: memory.icon,
       authorName:
         nameByUser.get(memory.author_user_id) ||
         (memory.author_user_id === userId ? "You" : "Your partner"),

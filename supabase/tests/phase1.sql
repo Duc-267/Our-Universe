@@ -11,7 +11,7 @@ select test.assert_true(not has_table_privilege('anon', 'public.relationship_eve
 select test.assert_true(not has_table_privilege('authenticated', 'public.memories', 'INSERT'), 'memories cannot be inserted directly');
 select test.assert_true(not has_table_privilege('authenticated', 'public.cosmic_objects', 'INSERT'), 'cosmic objects cannot be inserted directly');
 select test.assert_true(not has_table_privilege('authenticated', 'public.relationship_events', 'INSERT'), 'relationship events cannot be inserted directly');
-select test.assert_true(not has_function_privilege('anon', 'public.create_memory(uuid, text, date, text, text, text, smallint)', 'EXECUTE'), 'anon cannot create memories');
+select test.assert_true(not has_function_privilege('anon', 'public.create_memory(uuid, text, date, text, text, text, smallint, text)', 'EXECUTE'), 'anon cannot create memories');
 
 create or replace function test.reject_create(
   p_couple_id uuid, p_title text, p_memory_date date, p_category text, p_importance smallint
@@ -77,6 +77,9 @@ select test.assert_true(
   (select object_type = 'STAR' and brightness = 0.55 from public.cosmic_objects
    where memory_id = :'memory_walk'),
   'normal memory renders a star');
+select test.assert_true(
+  (select icon = 'coffee' from public.memories where id = :'memory_walk'),
+  'everyday memory defaults to the coffee icon');
 select test.assert_true(
   (select position_x ^ 2 + position_y ^ 2 + position_z ^ 2 between 46 ^ 2 and 80 ^ 2
    from public.cosmic_objects where memory_id = :'memory_walk'),

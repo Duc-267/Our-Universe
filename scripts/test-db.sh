@@ -4,6 +4,7 @@ set -euo pipefail
 psql -v ON_ERROR_STOP=1 -f supabase/tests/bootstrap.sql
 psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261008000100_phase0_foundation.sql
 psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011145341_phase1_universe_memories.sql
+psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261013231000_memory_icons.sql
 psql -v ON_ERROR_STOP=1 -f supabase/tests/phase0.sql
 psql -v ON_ERROR_STOP=1 -f supabase/tests/phase1.sql
 

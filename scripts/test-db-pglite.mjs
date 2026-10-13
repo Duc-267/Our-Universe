@@ -32,6 +32,7 @@ try {
   await database.exec(readFileSync("supabase/tests/bootstrap.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261008000100_phase0_foundation.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261011145341_phase1_universe_memories.sql", "utf8"));
+  await database.exec(readFileSync("supabase/migrations/20261013231000_memory_icons.sql", "utf8"));
   await query("insert into public.profiles (id, display_name) select id, raw_user_meta_data ->> 'display_name' from auth.users");
   await query(
     "insert into auth.users(id, raw_user_meta_data) values ($1, $2::jsonb)",
@@ -114,6 +115,12 @@ try {
   assert.equal(
     (await query("select title, category, importance from public.memories where id = $1", [memoryWalk]))[0].title,
     "First evening walk",
+  );
+  assert.equal((await query("select icon from public.memories where id = $1", [memoryWalk]))[0].icon, "coffee");
+  await rejected(
+    () => query("select public.create_memory($1, $2, $3::date, $4, $5, $6, $7, $8)",
+      [coupleA, "Nope", "2024-04-02", null, null, "random", 4, "dragon"]),
+    "unknown icon must fail",
   );
   assert.equal(
     (await query(
@@ -204,6 +211,12 @@ try {
   assert.equal(after.position_z, before.position_z);
   assert.equal(new Date(after.memory_date).toISOString().slice(0, 10), "2024-03-05");
   assert.equal(new Date(after.event_date).toISOString().slice(0, 10), "2024-03-05");
+  assert.equal((await query("select icon from public.memories where id = $1", [memoryWalk]))[0].icon, "coffee");
+  await query(
+    "select public.update_memory($1, $2, $3::date, $4, $5, $6, $7, $8)",
+    [memoryWalk, "First evening walk", "2024-03-05", "We walked along the river at dusk.", "Riverside park", "special", 9, "heart"],
+  );
+  assert.equal((await query("select icon from public.memories where id = $1", [memoryWalk]))[0].icon, "heart");
 
   await rejected(
     () => query("select public.create_memory($1, $2, $3::date, $4, $5, $6, $7)",
@@ -273,7 +286,7 @@ try {
   );
   assert.equal(
     (await query(
-      "select has_function_privilege('anon', 'public.create_memory(uuid, text, date, text, text, text, smallint)', 'EXECUTE')",
+      "select has_function_privilege('anon', 'public.create_memory(uuid, text, date, text, text, text, smallint, text)', 'EXECUTE')",
     ))[0].has_function_privilege,
     false,
   );

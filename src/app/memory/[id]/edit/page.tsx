@@ -23,7 +23,7 @@ export default async function EditMemoryPage({
     supabase
       .from("memories")
       .select(
-        "id, title, memory_date, description, location_text, category, importance, author_user_id",
+        "id, title, memory_date, description, location_text, category, importance, icon, author_user_id",
       )
       .eq("id", id)
       .maybeSingle(),
@@ -51,6 +51,7 @@ export default async function EditMemoryPage({
             locationText: memory.data.location_text,
             category: memory.data.category,
             importance: memory.data.importance,
+            icon: memory.data.icon,
           }}
         />
       </section>
