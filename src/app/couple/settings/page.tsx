@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
@@ -55,14 +56,29 @@ export default async function SettingsPage({
           <h2 id="members-heading">People in this universe</h2>
           <p className="member-note">{members.data.length} of 2 members have joined.</p>
           <ul className="member-list">
-            {memberProfiles.data.map((member) => (
-              <li key={member.id}>
-                <span className="member-avatar" aria-hidden="true">
-                  {(member.display_name || "?").slice(0, 1).toUpperCase()}
-                </span>
-                <span>{member.display_name || (member.id === userId ? "You" : "Your partner")}</span>
-                {member.id === userId && <span className="member-self">You</span>}
-              </li>
+            {memberProfiles.data.map((member, index) => (
+              <Fragment key={member.id}>
+                {index > 0 && (
+                  <li className="member-heart-divider" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path
+                        d="M12 20.3C7.2 16.8 3.9 13.4 3.9 9.9c0-2.6 2-4.6 4.4-4.6 1.5 0 2.9.8 3.7 2.1.8-1.3 2.2-2.1 3.7-2.1 2.4 0 4.4 2 4.4 4.6 0 3.5-3.3 6.9-8.1 10.4z"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </li>
+                )}
+                <li>
+                  <span className="member-avatar" aria-hidden="true">
+                    {(member.display_name || "?").slice(0, 1).toUpperCase()}
+                  </span>
+                  <span>{member.display_name || (member.id === userId ? "You" : "Your partner")}</span>
+                  {member.id === userId && <span className="member-self">You</span>}
+                </li>
+              </Fragment>
             ))}
           </ul>
         </section>

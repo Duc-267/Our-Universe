@@ -158,7 +158,7 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
         const point = projectPoint(bg.x, bg.y, bg.z, 0.75, 520);
         if (!point) continue;
         ctx.globalAlpha = bg.alpha;
-        ctx.fillStyle = "#c8d4ee";
+        ctx.fillStyle = "#dccbe8";
         ctx.beginPath();
         ctx.arc(point.x, point.y, bg.size, 0, Math.PI * 2);
         ctx.fill();
@@ -178,8 +178,8 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
         point.y,
         radius * 1.9,
       );
-      glow.addColorStop(0, "rgba(86, 122, 182, 0.3)");
-      glow.addColorStop(1, "rgba(86, 122, 182, 0)");
+      glow.addColorStop(0, "rgba(255, 179, 200, 0.2)");
+      glow.addColorStop(1, "rgba(255, 179, 200, 0)");
       ctx.fillStyle = glow;
       ctx.beginPath();
       ctx.arc(point.x, point.y, radius * 1.9, 0, Math.PI * 2);
@@ -192,14 +192,14 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
         point.y,
         radius,
       );
-      body.addColorStop(0, "#4d6fa5");
-      body.addColorStop(0.55, "#24395e");
-      body.addColorStop(1, "#0b1526");
+      body.addColorStop(0, "#9a6486");
+      body.addColorStop(0.55, "#553052");
+      body.addColorStop(1, "#1d1028");
       ctx.fillStyle = body;
       ctx.beginPath();
       ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = "rgba(158, 186, 229, 0.35)";
+      ctx.strokeStyle = "rgba(255, 214, 228, 0.4)";
       ctx.lineWidth = 1;
       ctx.stroke();
     };
@@ -207,19 +207,19 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
     const drawLabel = (x: number, y: number, text: string) => {
       const padX = 7;
       const boxHeight = 20;
-      ctx.font = "13px Arial, Helvetica, sans-serif";
+      ctx.font = "12px Arial, Helvetica, sans-serif";
       const textWidth = ctx.measureText(text).width;
       const boxWidth = textWidth + padX * 2;
       const bx = clamp(x - boxWidth / 2, 4, width - boxWidth - 4);
       const by = clamp(y - boxHeight - 8, 4, height - boxHeight - 4);
-      ctx.fillStyle = "rgba(7, 13, 26, 0.88)";
-      ctx.strokeStyle = "rgba(72, 86, 109, 0.9)";
+      ctx.fillStyle = "rgba(21, 12, 32, 0.9)";
+      ctx.strokeStyle = "rgba(255, 240, 245, 0.22)";
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.rect(bx, by, boxWidth, boxHeight);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = "#f3d7c2";
+      ctx.fillStyle = "#ffb3c8";
       ctx.textBaseline = "middle";
       ctx.fillText(text, bx + padX, by + boxHeight / 2);
     };
@@ -242,8 +242,8 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
         glow.addColorStop(
           0,
           star.bright
-            ? `rgba(255, 226, 166, ${alpha * 0.55})`
-            : `rgba(255, 244, 226, ${alpha * 0.4})`,
+            ? `rgba(255, 204, 150, ${alpha * 0.6})`
+            : `rgba(255, 205, 224, ${alpha * 0.42})`,
         );
         glow.addColorStop(1, "rgba(255, 244, 226, 0)");
         ctx.fillStyle = glow;
@@ -252,14 +252,14 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
         ctx.fill();
 
         ctx.fillStyle = star.bright
-          ? `rgba(255, 227, 170, ${alpha})`
-          : `rgba(255, 245, 235, ${alpha})`;
+          ? `rgba(255, 217, 168, ${alpha})`
+          : `rgba(255, 240, 245, ${alpha})`;
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
 
         if (star.bright) {
-          ctx.strokeStyle = `rgba(255, 227, 170, ${alpha * 0.45})`;
+          ctx.strokeStyle = `rgba(255, 217, 168, ${alpha * 0.45})`;
           ctx.lineWidth = 1;
           const spike = r * 2.6;
           ctx.beginPath();
@@ -271,7 +271,7 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
         }
 
         if (star.memoryId === selectedRef.current) {
-          ctx.strokeStyle = "rgba(243, 215, 194, 0.9)";
+          ctx.strokeStyle = "rgba(255, 179, 200, 0.95)";
           ctx.lineWidth = 1.5;
           ctx.beginPath();
           ctx.arc(x, y, r + 6, 0, Math.PI * 2);

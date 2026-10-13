@@ -38,6 +38,39 @@ type Props = {
 
 const initialDeleteState: DeleteMemoryState = { ok: false, error: null };
 
+function HeartIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 20.3C7.2 16.8 3.9 13.4 3.9 9.9c0-2.6 2-4.6 4.4-4.6 1.5 0 2.9.8 3.7 2.1.8-1.3 2.2-2.1 3.7-2.1 2.4 0 4.4 2 4.4 4.6 0 3.5-3.3 6.9-8.1 10.4z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SparkIcon({ bright }: { bright: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={bright ? "star-spark-bright" : "star-spark-dim"}>
+      <path d="M12 2.6c.6 5 3.4 7.8 8.4 8.4-5 .6-7.8 3.4-8.4 8.4-.6-5-3.4-7.8-8.4-8.4 5-.6 7.8-3.4 8.4-8.4z" />
+    </svg>
+  );
+}
+
+function TwinStarIcon() {
+  return (
+    <svg viewBox="0 0 96 48" fill="none" aria-hidden="true" className="universe-twin">
+      <circle cx="36" cy="26" r="15" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="60" cy="26" r="15" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="48" cy="11.5" r="2.4" fill="currentColor" />
+      <circle cx="48" cy="40.5" r="2.4" fill="currentColor" />
+    </svg>
+  );
+}
+
 function formatDate(iso: string): string {
   return new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
@@ -58,6 +91,10 @@ function ageLine(age: RelationshipAge): string {
   return `${days} days together · next anniversary in ${daysAway} ${daysAway === 1 ? "day" : "days"}`;
 }
 
+function categoryLabel(category: string): string {
+  return category.charAt(0).toUpperCase() + category.slice(1);
+}
+
 export function UniverseView({ memories, age, canInvite, initialSelectedId }: Props) {
   const [selectedId, setSelectedId] = useState(initialSelectedId);
   const [seenInitialId, setSeenInitialId] = useState(initialSelectedId);
@@ -70,6 +107,7 @@ export function UniverseView({ memories, age, canInvite, initialSelectedId }: Pr
   }
 
   const selected = memories.find((memory) => memory.id === selectedId) ?? null;
+  const isAnniversary = age.nextAnniversary?.daysAway === 0;
 
   const closeDetail = () => {
     setSelectedId(null);
@@ -97,13 +135,17 @@ export function UniverseView({ memories, age, canInvite, initialSelectedId }: Pr
     <div className="universe-shell">
       <h1 className="sr-only">Your universe</h1>
       <div className="universe-toolbar">
-        <p className="universe-age">{ageLine(age)}</p>
+        <p className={`universe-age-chip${isAnniversary ? " is-anniversary" : ""}`}>
+          <HeartIcon />
+          {ageLine(age)}
+        </p>
         <Link className="primary-button universe-add" href="/memory/new">Add a memory</Link>
       </div>
       <UniverseScene stars={sceneStars} selectedId={selectedId} onSelect={setSelectedId} />
       {memories.length === 0 ? (
         <section className="universe-empty-overlay" aria-labelledby="universe-title">
           <div className="universe-empty-card">
+            <TwinStarIcon />
             <h2 id="universe-title">Your universe begins here.</h2>
             {canInvite ? (
               <Link className="primary-button universe-action" href="/couple/invite">Invite your partner</Link>
@@ -127,10 +169,12 @@ export function UniverseView({ memories, age, canInvite, initialSelectedId }: Pr
                   aria-current={memory.id === selectedId ? "true" : undefined}
                   onClick={() => setSelectedId(memory.id)}
                 >
-                  <span className="star-option-title">{memory.title}</span>
+                  <span className="star-option-title">
+                    <SparkIcon bright={memory.star?.type === "BRIGHT_STAR"} />
+                    {memory.title}
+                  </span>
                   <span className="star-option-meta">
                     {formatDate(memory.memoryDate)} · {memory.category}
-                    {memory.star?.type === "BRIGHT_STAR" ? " · bright star" : ""}
                   </span>
                 </button>
               </li>
@@ -174,12 +218,14 @@ function MemoryDialog({ memory, onClose }: { memory: UniverseMemory; onClose: ()
           </button>
         </div>
         <p className="memory-dialog-meta">
-          {formatDate(memory.memoryDate)} · saved by {memory.authorName} · {memory.category}
+          {formatDate(memory.memoryDate)} · saved by {memory.authorName}
+          <HeartIcon />
         </p>
-        <p className="memory-dialog-importance">
-          Importance {memory.importance}/10
-          {memory.star?.type === "BRIGHT_STAR" ? " · shines as a bright star" : ""}
-        </p>
+        <div className="memory-chip-row">
+          <span className="memory-chip">{categoryLabel(memory.category)}</span>
+          <span className="memory-chip">Importance {memory.importance}/10</span>
+          {memory.star?.type === "BRIGHT_STAR" && <span className="memory-chip is-bright">Bright star</span>}
+        </div>
         {memory.description && <p className="memory-dialog-description">{memory.description}</p>}
         {memory.locationText && (
           <p className="memory-dialog-location">Location: {memory.locationText}</p>
