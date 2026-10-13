@@ -13,6 +13,7 @@ export type SceneStar = {
   rotation: number;
   visualSeed: number;
   bright: boolean;
+  category: string;
 };
 
 type Props = {
@@ -27,7 +28,32 @@ const START_DIST = 175;
 const START_YAW = 0.65;
 const START_PITCH = -0.22;
 
-type BackgroundStar = { x: number; y: number; z: number; size: number; alpha: number };
+type StarHue = { core: string; glow: string };
+
+const STAR_HUES: Record<string, StarHue> = {
+  everyday: { core: "#ffe4ef", glow: "255, 176, 206" },
+  date: { core: "#ffd0e4", glow: "255, 112, 164" },
+  trip: { core: "#ffe0b0", glow: "255, 186, 92" },
+  funny: { core: "#ffd2c2", glow: "255, 154, 122" },
+  special: { core: "#fff1c2", glow: "255, 214, 120" },
+  difficult: { core: "#e4dcff", glow: "186, 164, 255" },
+  random: { core: "#d7f3ff", glow: "126, 206, 255" },
+};
+
+const FIELD_COLORS = ["#fff6fb", "#ffd0e2", "#ffe0a8", "#ddd0ff", "#c8ecff"];
+
+type BackgroundStar = { x: number; y: number; z: number; size: number; alpha: number; color: string };
+
+type DustMote = {
+  x: number;
+  y: number;
+  z: number;
+  size: number;
+  alpha: number;
+  heart: boolean;
+  hue: string;
+  spin: number;
+};
 
 function makeBackgroundStars(count: number): BackgroundStar[] {
   const golden = Math.PI * (3 - Math.sqrt(5));
@@ -41,8 +67,9 @@ function makeBackgroundStars(count: number): BackgroundStar[] {
       x: radius * Math.sin(phi) * Math.cos(theta),
       y: radius * Math.cos(phi),
       z: radius * Math.sin(phi) * Math.sin(theta),
-      size: 0.6 + (((i * 37) % 13) / 13) * 1.1,
-      alpha: 0.16 + (((i * 53) % 17) / 17) * 0.4,
+      size: 0.6 + (((i * 37) % 13) / 13) * 1.4,
+      alpha: 0.28 + (((i * 53) % 17) / 17) * 0.55,
+      color: FIELD_COLORS[i % FIELD_COLORS.length],
     });
   }
   return stars;
@@ -50,6 +77,73 @@ function makeBackgroundStars(count: number): BackgroundStar[] {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function hueFor(category: string): StarHue {
+  return STAR_HUES[category] ?? STAR_HUES.everyday;
+}
+
+function makeDust(): DustMote[] {
+  const motes: DustMote[] = [];
+  for (let i = 0; i < 28; i += 1) {
+    const angle = (i / 28) * Math.PI * 2;
+    const radius = 24 + (i % 5) * 2.4;
+    const heart = i % 4 === 0;
+    motes.push({
+      x: Math.cos(angle) * radius,
+      y: Math.sin(angle * 2) * 4.5,
+      z: Math.sin(angle) * radius,
+      size: heart ? 5.5 : 1.3 + (i % 3) * 0.45,
+      alpha: heart ? 0.72 : 0.35 + (i % 4) * 0.08,
+      heart,
+      hue: i % 2 === 0 ? "255, 140, 176" : "255, 196, 120",
+      spin: angle,
+    });
+  }
+  return motes;
+}
+
+function makeGlowSprite(rgb: string): HTMLCanvasElement {
+  const size = 64;
+  const sprite = document.createElement("canvas");
+  sprite.width = size;
+  sprite.height = size;
+  const glow = sprite.getContext("2d");
+  if (!glow) return sprite;
+  const gradient = glow.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gradient.addColorStop(0, `rgba(${rgb}, 0.95)`);
+  gradient.addColorStop(0.28, `rgba(${rgb}, 0.42)`);
+  gradient.addColorStop(1, `rgba(${rgb}, 0)`);
+  glow.fillStyle = gradient;
+  glow.fillRect(0, 0, size, size);
+  return sprite;
+}
+
+function paintBackdrop(target: HTMLCanvasElement, width: number, height: number) {
+  target.width = Math.max(1, Math.round(width));
+  target.height = Math.max(1, Math.round(height));
+  const glow = target.getContext("2d");
+  if (!glow) return;
+  const sky = glow.createLinearGradient(0, 0, width, height);
+  sky.addColorStop(0, "#3a1848");
+  sky.addColorStop(0.42, "#1c0d2c");
+  sky.addColorStop(1, "#140818");
+  glow.fillStyle = sky;
+  glow.fillRect(0, 0, width, height);
+  const blobs = [
+    { x: width * 0.18, y: height * 0.22, r: Math.max(width, height) * 0.48, color: "255, 96, 150" },
+    { x: width * 0.82, y: height * 0.7, r: Math.max(width, height) * 0.42, color: "255, 176, 84" },
+    { x: width * 0.58, y: height * 0.16, r: Math.max(width, height) * 0.32, color: "176, 132, 255" },
+    { x: width * 0.36, y: height * 0.82, r: Math.max(width, height) * 0.34, color: "255, 128, 176" },
+  ];
+  for (const blob of blobs) {
+    const gradient = glow.createRadialGradient(blob.x, blob.y, 0, blob.x, blob.y, blob.r);
+    gradient.addColorStop(0, `rgba(${blob.color}, 0.5)`);
+    gradient.addColorStop(0.42, `rgba(${blob.color}, 0.16)`);
+    gradient.addColorStop(1, `rgba(${blob.color}, 0)`);
+    glow.fillStyle = gradient;
+    glow.fillRect(0, 0, width, height);
+  }
 }
 
 export function UniverseScene({ stars, selectedId, onSelect }: Props) {
@@ -76,7 +170,15 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const cam = { yaw: START_YAW, pitch: START_PITCH, dist: START_DIST };
-    const background = makeBackgroundStars(170);
+    const background = makeBackgroundStars(220);
+    const dust = makeDust();
+    const backdrop = document.createElement("canvas");
+    const glowSprites = new Map<string, HTMLCanvasElement>();
+    for (const hue of Object.values(STAR_HUES)) {
+      if (!glowSprites.has(hue.glow)) glowSprites.set(hue.glow, makeGlowSprite(hue.glow));
+    }
+    glowSprites.set("255, 140, 176", makeGlowSprite("255, 140, 176"));
+    glowSprites.set("255, 196, 120", makeGlowSprite("255, 196, 120"));
     const pointers = new Map<number, { x: number; y: number }>();
     let pinchStart = 0;
     let pinchDistStart = START_DIST;
@@ -88,6 +190,7 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
     let raf = 0;
     let lastTime = 0;
     let lastInteraction = -10_000;
+    let backdropKey = "";
 
     const resize = () => {
       const rect = container.getBoundingClientRect();
@@ -96,6 +199,11 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
       dpr = Math.min(2, window.devicePixelRatio || 1);
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
+      const key = `${Math.round(width)}x${Math.round(height)}`;
+      if (key !== backdropKey) {
+        backdropKey = key;
+        paintBackdrop(backdrop, width, height);
+      }
     };
     resize();
     const resizeObserver = new ResizeObserver(resize);
@@ -154,11 +262,12 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
     };
 
     const drawBackground = () => {
+      if (backdrop.width > 0) ctx.drawImage(backdrop, 0, 0, width, height);
       for (const bg of background) {
         const point = projectPoint(bg.x, bg.y, bg.z, 0.75, 520);
         if (!point) continue;
         ctx.globalAlpha = bg.alpha;
-        ctx.fillStyle = "#dccbe8";
+        ctx.fillStyle = bg.color;
         ctx.beginPath();
         ctx.arc(point.x, point.y, bg.size, 0, Math.PI * 2);
         ctx.fill();
@@ -166,42 +275,89 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
       ctx.globalAlpha = 1;
     };
 
+    const ringPoints = (time: number) => {
+      const spin = reducedMotion.matches ? 0.4 : time / 14000;
+      const points: { x: number; y: number; depth: number }[] = [];
+      for (let i = 0; i <= 72; i += 1) {
+        const angle = (i / 72) * Math.PI * 2 + spin;
+        const point = projectPoint(Math.cos(angle) * 30, Math.sin(angle) * 5.5, Math.sin(angle) * 30, 1, 0);
+        if (point) points.push(point);
+      }
+      return points;
+    };
+
+    const strokeRing = (
+      points: { x: number; y: number; depth: number }[],
+      far: boolean,
+      planetDepth: number,
+      alpha: number,
+    ) => {
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(255, 214, 150, ${alpha})`;
+      ctx.lineWidth = far ? 1.4 : 2.2;
+      let drawing = false;
+      for (const point of points) {
+        if ((point.depth > planetDepth) !== far) {
+          drawing = false;
+          continue;
+        }
+        if (!drawing) {
+          ctx.moveTo(point.x, point.y);
+          drawing = true;
+        } else {
+          ctx.lineTo(point.x, point.y);
+        }
+      }
+      ctx.stroke();
+    };
+
     const drawPlanet = () => {
       const point = projectPoint(0, 0, 0, 1, 0);
-      if (!point) return;
-      const radius = (16 * focal()) / cam.dist;
-      const glow = ctx.createRadialGradient(
-        point.x,
-        point.y,
-        radius * 0.6,
-        point.x,
-        point.y,
-        radius * 1.9,
-      );
-      glow.addColorStop(0, "rgba(255, 179, 200, 0.2)");
-      glow.addColorStop(1, "rgba(255, 179, 200, 0)");
-      ctx.fillStyle = glow;
+      if (!point) return null;
+      const radius = (18 * focal()) / cam.dist;
+      const atmosphere = ctx.createRadialGradient(point.x, point.y, radius * 0.7, point.x, point.y, radius * 2.6);
+      atmosphere.addColorStop(0, "rgba(255, 150, 186, 0.45)");
+      atmosphere.addColorStop(0.45, "rgba(255, 186, 120, 0.16)");
+      atmosphere.addColorStop(1, "rgba(255, 150, 186, 0)");
+      ctx.fillStyle = atmosphere;
       ctx.beginPath();
-      ctx.arc(point.x, point.y, radius * 1.9, 0, Math.PI * 2);
+      ctx.arc(point.x, point.y, radius * 2.6, 0, Math.PI * 2);
       ctx.fill();
       const body = ctx.createRadialGradient(
-        point.x - radius * 0.35,
-        point.y - radius * 0.4,
-        radius * 0.1,
-        point.x,
-        point.y,
+        point.x - radius * 0.38,
+        point.y - radius * 0.42,
+        radius * 0.08,
+        point.x + radius * 0.1,
+        point.y + radius * 0.15,
         radius,
       );
-      body.addColorStop(0, "#9a6486");
-      body.addColorStop(0.55, "#553052");
-      body.addColorStop(1, "#1d1028");
+      body.addColorStop(0, "#ffe0c2");
+      body.addColorStop(0.28, "#ff8fb2");
+      body.addColorStop(0.62, "#c45b86");
+      body.addColorStop(1, "#4a2048");
       ctx.fillStyle = body;
       ctx.beginPath();
       ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = "rgba(255, 214, 228, 0.4)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      ctx.fillStyle = "rgba(255, 244, 230, 0.55)";
+      ctx.beginPath();
+      ctx.ellipse(point.x - radius * 0.28, point.y - radius * 0.32, radius * 0.22, radius * 0.14, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+      return point;
+    };
+
+    const paintHeart = (x: number, y: number, size: number, rgb: string, alpha: number) => {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(size, size);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = `rgb(${rgb})`;
+      ctx.beginPath();
+      ctx.moveTo(0, 0.35);
+      ctx.bezierCurveTo(-0.55, -0.05, -0.4, -0.72, 0, -0.32);
+      ctx.bezierCurveTo(0.4, -0.72, 0.55, -0.05, 0, 0.35);
+      ctx.fill();
+      ctx.restore();
     };
 
     const drawLabel = (x: number, y: number, text: string) => {
@@ -224,44 +380,32 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
       ctx.fillText(text, bx + padX, by + boxHeight / 2);
     };
 
-    const drawStars = (time: number) => {
-      const projected = starsRef.current
-        .map((star) => projectStar(star))
-        .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
-        .sort((a, b) => b.depth - a.depth);
-
-      for (const entry of projected) {
+    const drawStars = (entries: NonNullable<ReturnType<typeof projectStar>>[], time: number) => {
+      for (const entry of entries) {
         const { star, x, y, r } = entry;
+        const hue = hueFor(star.category);
         const twinkle = reducedMotion.matches
           ? 0
-          : Math.sin(time / 900 + star.rotation * 7) * 0.07;
-        const alpha = clamp(star.brightness + twinkle, 0.05, 1);
-
-        const glowRadius = star.bright ? r * 5 : r * 3.4;
-        const glow = ctx.createRadialGradient(x, y, 0, x, y, glowRadius);
-        glow.addColorStop(
-          0,
-          star.bright
-            ? `rgba(255, 204, 150, ${alpha * 0.6})`
-            : `rgba(255, 205, 224, ${alpha * 0.42})`,
-        );
-        glow.addColorStop(1, "rgba(255, 244, 226, 0)");
-        ctx.fillStyle = glow;
-        ctx.beginPath();
-        ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = star.bright
-          ? `rgba(255, 217, 168, ${alpha})`
-          : `rgba(255, 240, 245, ${alpha})`;
+          : Math.sin(time / 900 + star.rotation * 7) * 0.08;
+        const alpha = clamp(star.brightness + twinkle, 0.2, 1);
+        const sprite = glowSprites.get(hue.glow);
+        const glowRadius = star.bright ? r * 7 : r * 4.6;
+        if (sprite) {
+          ctx.globalAlpha = alpha * (star.bright ? 0.95 : 0.72);
+          ctx.drawImage(sprite, x - glowRadius, y - glowRadius, glowRadius * 2, glowRadius * 2);
+          ctx.globalAlpha = 1;
+        }
+        ctx.fillStyle = star.bright ? `rgba(255, 248, 236, ${alpha})` : hue.core;
+        ctx.globalAlpha = alpha;
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
+        ctx.globalAlpha = 1;
 
         if (star.bright) {
-          ctx.strokeStyle = `rgba(255, 217, 168, ${alpha * 0.45})`;
-          ctx.lineWidth = 1;
-          const spike = r * 2.6;
+          ctx.strokeStyle = `rgba(${hue.glow}, ${alpha * 0.85})`;
+          ctx.lineWidth = 1.25;
+          const spike = r * 3.1;
           ctx.beginPath();
           ctx.moveTo(x - spike, y);
           ctx.lineTo(x + spike, y);
@@ -271,15 +415,48 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
         }
 
         if (star.memoryId === selectedRef.current) {
-          ctx.strokeStyle = "rgba(255, 179, 200, 0.95)";
-          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = "rgba(255, 226, 170, 0.95)";
+          ctx.lineWidth = 1.6;
           ctx.beginPath();
-          ctx.arc(x, y, r + 6, 0, Math.PI * 2);
+          ctx.arc(x, y, r + 7, 0, Math.PI * 2);
           ctx.stroke();
         }
 
-        if (star.memoryId === hoverId) {
-          drawLabel(x, y - r, star.title);
+        if (star.memoryId === hoverId) drawLabel(x, y - r, star.title);
+      }
+    };
+
+    const drawDust = (far: boolean, planetDepth: number, time: number) => {
+      const drift = reducedMotion.matches ? 0 : time / 9000;
+      for (const mote of dust) {
+        const spin = mote.spin + drift;
+        const point = projectPoint(
+          Math.cos(spin) * Math.hypot(mote.x, mote.z),
+          mote.y,
+          Math.sin(spin) * Math.hypot(mote.x, mote.z),
+          1,
+          0,
+        );
+        if (!point) continue;
+        const isFar = point.depth > planetDepth;
+        if (isFar !== far) continue;
+        if (mote.heart) {
+          const size = Math.max(3.2, (mote.size * focal()) / point.depth);
+          paintHeart(point.x, point.y, size, mote.hue, mote.alpha);
+        } else {
+          const sprite = glowSprites.get(mote.hue);
+          const radius = Math.max(1.2, (mote.size * focal()) / point.depth);
+          if (sprite) {
+            ctx.globalAlpha = mote.alpha;
+            ctx.drawImage(sprite, point.x - radius * 4, point.y - radius * 4, radius * 8, radius * 8);
+            ctx.globalAlpha = 1;
+          }
+          ctx.globalAlpha = mote.alpha + 0.2;
+          ctx.fillStyle = `rgb(${mote.hue})`;
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
         }
       }
     };
@@ -293,8 +470,23 @@ export function UniverseScene({ stars, selectedId, onSelect }: Props) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
       drawBackground();
+
+      const planetPoint = projectPoint(0, 0, 0, 1, 0);
+      const planetDepth = planetPoint?.depth ?? cam.dist;
+      const ring = ringPoints(time);
+      const projected = starsRef.current
+        .map((star) => projectStar(star))
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+      const farStars = projected.filter((entry) => entry.depth > planetDepth).sort((a, b) => b.depth - a.depth);
+      const nearStars = projected.filter((entry) => entry.depth <= planetDepth).sort((a, b) => b.depth - a.depth);
+
+      strokeRing(ring, true, planetDepth, 0.4);
+      drawDust(true, planetDepth, time);
+      drawStars(farStars, time);
       drawPlanet();
-      drawStars(time);
+      strokeRing(ring, false, planetDepth, 0.9);
+      drawDust(false, planetDepth, time);
+      drawStars(nearStars, time);
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);

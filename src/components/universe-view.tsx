@@ -129,6 +129,7 @@ export function UniverseView({ memories, age, canInvite, initialSelectedId }: Pr
       rotation: memory.star!.rotation,
       visualSeed: memory.star!.visualSeed,
       bright: memory.star!.type === "BRIGHT_STAR",
+      category: memory.category,
     }));
 
   return (

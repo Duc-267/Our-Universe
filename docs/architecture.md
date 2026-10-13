@@ -11,7 +11,7 @@
 - Phase 1's 3D universe and photo pipeline attach to this foundation later; they do not determine Phase 0's authentication or membership rules.
 
 ### Application (Phase 1)
-- `/universe` renders a dependency-free canvas scene: a central planet, a decorative background starfield, and one persistent star per memory. Stars are projected with a lightweight 3D rotation and stay at the position stored at creation time.
+- `/universe` renders a dependency-free canvas scene: a rose-gold nebula, a central planet with a tilted ring, a decorative background starfield, and one persistent star per memory. Memory stars take their hue from category. Stars are projected with a lightweight 3D rotation and stay at the position stored at creation time. Later object types (moons, comets, twin stars, constellation lines) should be extra draw passes on the same projector.
 - Memory writes go through `private.create_memory`, `private.update_memory`, and `private.delete_memory`. Creation inserts the memory, its `MEMORY_CREATED` relationship event, and its star in one transaction. Updates are author-only and refresh the star's type, scale, and brightness when importance changes; they never move the star. Deletion removes the event and star with the memory.
 - The first Universe Engine rule maps importance to visuals: importance >= 8 renders `BRIGHT_STAR` with higher brightness and scale; other memories render `STAR`.
 - The scene supports pointer, touch, and keyboard camera controls, and the page keeps a semantic, keyboard-operable star list and native detail dialog for accessibility. `prefers-reduced-motion` disables idle drift and twinkle.
@@ -61,3 +61,4 @@
 - 2026-10-12: Derive star positions deterministically from a SHA-256 digest of the memory id at creation and store them on the cosmic object. Updates may change a star's type, scale, and brightness but never its position, so stars stay consistent between sessions.
 - 2026-10-12: Map memory importance to the first Universe Engine rule: importance >= 8 becomes a `BRIGHT_STAR` with brightness 0.85 and a larger scale; otherwise a `STAR` with brightness 0.55.
 - 2026-10-12: Keep memory creation, update, and deletion in private schema functions so the memory, its relationship event, and its star stay consistent in one transaction; direct table writes stay revoked from authenticated clients.
+- 2026-10-13: Enrich the Phase 1 sky on the existing canvas projector — painted nebula, a depth-split ring, and category hues — instead of adopting React Three Fiber now. The projector, hit testing, and reduced-motion behavior stay shared so later cosmic objects can be new draw passes. React Three Fiber remains the path when moons, trip planets, or constellation geometry need real meshes.
