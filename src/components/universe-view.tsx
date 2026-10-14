@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
 import { CheckInPanel, type CheckinRow } from "@/components/check-in-panel";
+import { SameMomentDialog, SameMomentPanel, type SameMomentRow } from "@/components/same-moment-panel";
 import type { RelationshipAge } from "@/features/couple/age";
 import type { CoupleSky } from "@/features/checkin/weather";
 import { deleteCapsule, openCapsule } from "@/features/capsule/actions";
@@ -12,7 +13,7 @@ import { deleteMemory, type DeleteMemoryState } from "@/features/memory/actions"
 import { memoryIcon } from "@/features/memory/icons";
 import { categoryColor, STICKER_INK } from "@/features/memory/palette";
 import { createClient } from "@/lib/supabase/client";
-import { UniverseScene, type SceneCapsule, type SceneStar } from "./universe-scene";
+import { UniverseScene, type SceneCapsule, type SceneStar, type SceneTwin } from "./universe-scene";
 
 export type UniverseMemory = {
   id: string;
@@ -58,16 +59,19 @@ export type UniverseCapsule = {
   } | null;
 };
 
-type Selection = { kind: "star" | "capsule"; id: string } | null;
+type Selection = { kind: "star" | "capsule" | "moment"; id: string } | null;
 
 type Props = {
   coupleId: string;
+  userId: string;
   memories: UniverseMemory[];
   capsules: UniverseCapsule[];
+  moments: SameMomentRow[];
   age: RelationshipAge;
   canInvite: boolean;
   initialSelectedId: string | null;
   initialCapsuleId: string | null;
+  initialMomentId: string | null;
   today: string;
   checkins: CheckinRow[];
   sky: CoupleSky;
@@ -143,12 +147,15 @@ function capsuleLabel(capsule: UniverseCapsule): string {
 
 export function UniverseView({
   coupleId,
+  userId,
   memories,
   capsules,
+  moments,
   age,
   canInvite,
   initialSelectedId,
   initialCapsuleId,
+  initialMomentId,
   today,
   checkins,
   sky,
@@ -158,7 +165,9 @@ export function UniverseView({
     ? { kind: "star", id: initialSelectedId }
     : initialCapsuleId
       ? { kind: "capsule", id: initialCapsuleId }
-      : null;
+      : initialMomentId
+        ? { kind: "moment", id: initialMomentId }
+        : null;
   const [selected, setSelected] = useState<Selection>(initialSelection);
   const [seenSelection, setSeenSelection] = useState(initialSelection?.id ?? null);
   const [bornId, setBornId] = useState<string | null>(initialSelection?.id ?? null);
@@ -174,7 +183,11 @@ export function UniverseView({
   }
 
   useEffect(() => {
-    const ids = [...memories.map((memory) => memory.id), ...capsules.map((capsule) => capsule.id)];
+    const ids = [
+      ...memories.map((memory) => memory.id),
+      ...capsules.map((capsule) => capsule.id),
+      ...moments.filter((moment) => moment.status === "complete").map((moment) => moment.id),
+    ];
     if (knownIds.current) {
       const fresh = ids.find((id) => !knownIds.current?.has(id));
       if (fresh) {
@@ -183,7 +196,7 @@ export function UniverseView({
       }
     }
     knownIds.current = new Set(ids);
-  }, [memories, capsules]);
+  }, [memories, capsules, moments]);
 
   useEffect(() => {
     if (!bornId) return;
@@ -230,6 +243,16 @@ export function UniverseView({
         { event: "*", schema: "public", table: "memory_photos", filter: `couple_id=eq.${coupleId}` },
         () => router.refresh(),
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "same_moments", filter: `couple_id=eq.${coupleId}` },
+        () => router.refresh(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "same_moment_submissions", filter: `couple_id=eq.${coupleId}` },
+        () => router.refresh(),
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
@@ -242,11 +265,18 @@ export function UniverseView({
   const selectedCapsule = selected?.kind === "capsule"
     ? capsules.find((capsule) => capsule.id === selected.id) ?? null
     : null;
+  const selectedMoment = selected?.kind === "moment"
+    ? moments.find((moment) => moment.id === selected.id) ?? null
+    : null;
   const isAnniversary = age.nextAnniversary?.daysAway === 0;
 
   const closeDetail = () => {
     setSelected(null);
-    if (window.location.search.includes("star=") || window.location.search.includes("capsule=")) {
+    if (
+      window.location.search.includes("star=")
+      || window.location.search.includes("capsule=")
+      || window.location.search.includes("moment=")
+    ) {
       window.history.replaceState(null, "", "/universe");
     }
   };
@@ -280,6 +310,19 @@ export function UniverseView({
       rotation: capsule.comet!.rotation,
       visualSeed: capsule.comet!.visualSeed,
     }));
+  const sceneTwins: SceneTwin[] = moments.flatMap((moment) =>
+    moment.twins.map((twin) => ({
+      momentId: moment.id,
+      title: moment.status === "complete" ? "Twin stars" : "Same Moment",
+      slot: twin.slot,
+      positionX: twin.positionX,
+      positionY: twin.positionY,
+      positionZ: twin.positionZ,
+      scale: twin.scale,
+      rotation: twin.rotation,
+      visualSeed: twin.visualSeed,
+    })),
+  );
 
   return (
     <div className="universe-shell">
@@ -289,6 +332,7 @@ export function UniverseView({
           <UniverseScene
             stars={sceneStars}
             capsules={sceneCapsules}
+            twins={sceneTwins}
             selectedId={selected?.id ?? null}
             onSelect={setSelected}
             sky={sky}
@@ -319,7 +363,16 @@ export function UniverseView({
             </section>
           )}
         </div>
-        <CheckInPanel today={today} checkins={checkins} />
+        <div className="universe-side">
+          <CheckInPanel coupleId={coupleId} today={today} checkins={checkins} />
+          <SameMomentPanel
+            coupleId={coupleId}
+            userId={userId}
+            moments={moments}
+            selectedId={selected?.kind === "moment" ? selected.id : null}
+            onSelect={(id) => setSelected(id ? { kind: "moment", id } : null)}
+          />
+        </div>
       </div>
       {memories.length > 0 && (
         <section className="universe-list" aria-labelledby="universe-stars-heading">
@@ -391,6 +444,7 @@ export function UniverseView({
       )}
       {selectedMemory && <MemoryDialog memory={selectedMemory} onClose={closeDetail} />}
       {selectedCapsule && <CapsuleDialog capsule={selectedCapsule} onClose={closeDetail} />}
+      {selectedMoment && <SameMomentDialog moment={selectedMoment} onClose={closeDetail} />}
     </div>
   );
 }

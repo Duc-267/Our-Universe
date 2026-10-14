@@ -42,4 +42,4 @@ create table if not exists storage.objects (
 alter table storage.objects enable row level security;
 grant usage on schema storage to authenticated;
 grant select on storage.buckets to authenticated;
-grant select, insert, delete on storage.objects to authenticated;
+grant select, insert, update, delete on storage.objects to authenticated;

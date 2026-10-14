@@ -43,4 +43,6 @@ supabase db push
 
 `supabase/migrations/20261014140000_phase1_photos_capsules.sql` adds memory photos, secret capsules, and the private `universe-media` bucket. Apply it with `supabase db push` before attaching photos or sealing capsules. The bucket stays private: members receive short-lived signed URLs, and capsule images stay unreadable until the capsule is opened.
 
+`supabase/migrations/20261014153000_phase2_same_moment.sql` adds optional check-in photos, Same Moment invitations, blind submissions, and twin stars. Apply it with `supabase db push` before starting a Same Moment.
+
 Verified on 2026-10-12: after applying the migration, the Data API already serves all three tables — `GET /rest/v1/<table>` with the publishable key returns the 42501 privilege error for the anon role (table found, denied by design), not the PGRST205 "Could not find the table" error that missing or unexposed tables return. No dashboard exposure step is required; `/universe` reads these tables with the authenticated role.
