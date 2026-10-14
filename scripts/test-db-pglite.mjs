@@ -34,6 +34,7 @@ try {
   await database.exec(readFileSync("supabase/migrations/20261011145341_phase1_universe_memories.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261013231000_memory_icons.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261013233000_phase2_checkins.sql", "utf8"));
+  await database.exec(readFileSync("supabase/migrations/20261014140000_phase1_photos_capsules.sql", "utf8"));
   await query("insert into public.profiles (id, display_name) select id, raw_user_meta_data ->> 'display_name' from auth.users");
   await query(
     "insert into auth.users(id, raw_user_meta_data) values ($1, $2::jsonb)",
@@ -290,6 +291,46 @@ try {
   assert.equal((await query("select count(*)::int as n from public.daily_checkins where couple_id = $1", [coupleA]))[0].n, 1);
   await asUser(userIds.casey);
   assert.equal((await query("select count(*)::int as n from public.daily_checkins where couple_id = $1", [coupleA]))[0].n, 0);
+
+  await asUser(userIds.alex);
+  const unlockDate = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+  const [{ create_capsule: capsuleId }] = await query(
+    "select public.create_capsule($1, $2, $3, $4::date)",
+    [coupleA, "Later", "secret words", unlockDate],
+  );
+  assert.equal(
+    (await query("select object_type from public.cosmic_objects where capsule_id = $1", [capsuleId]))[0].object_type,
+    "COMET",
+  );
+  assert.equal((await query("select title from public.capsule_contents where capsule_id = $1", [capsuleId]))[0].title, "Later");
+  await rejected(
+    () => query("select public.open_capsule($1)", [capsuleId]),
+    "locked capsule cannot be opened",
+  );
+  const photoId = "00000000-0000-0000-0000-0000000000ab";
+  const photoBase = `${coupleA}/memories/${memoryWalk}/${photoId}/`;
+  await asOwner();
+  await query(
+    `insert into storage.objects (id, bucket_id, name, owner_id) values
+      (gen_random_uuid(), 'universe-media', $1, $2),
+      (gen_random_uuid(), 'universe-media', $3, $2)`,
+    [`${photoBase}full.webp`, userIds.alex, `${photoBase}thumb.webp`],
+  );
+  await asUser(userIds.alex);
+  await query("select public.add_memory_photo($1, $2, 'webp', 800, 600)", [memoryWalk, photoId]);
+  assert.equal((await query("select count(*)::int as n from public.memory_photos where memory_id = $1", [memoryWalk]))[0].n, 1);
+  await asUser(userIds.blair);
+  assert.equal((await query("select count(*)::int as n from public.memory_photos where memory_id = $1", [memoryWalk]))[0].n, 1);
+  assert.equal((await query("select count(*)::int as n from public.capsule_contents where capsule_id = $1", [capsuleId]))[0].n, 0);
+  assert.equal((await query("select count(*)::int as n from public.capsules where id = $1", [capsuleId]))[0].n, 1);
+  await asOwner();
+  await query("update public.capsules set unlock_at = now() - interval '1 minute' where id = $1", [capsuleId]);
+  await asUser(userIds.blair);
+  await query("select public.open_capsule($1)", [capsuleId]);
+  assert.equal((await query("select message from public.capsule_contents where capsule_id = $1", [capsuleId]))[0].message, "secret words");
+  await asUser(userIds.casey);
+  assert.equal((await query("select count(*)::int as n from public.capsules where id = $1", [capsuleId]))[0].n, 0);
+  assert.equal((await query("select count(*)::int as n from public.capsule_contents where capsule_id = $1", [capsuleId]))[0].n, 0);
   await rejected(
     () => query(
       "insert into public.daily_checkins (couple_id, author_user_id, local_date, mood) values ($1, $2, '2024-01-01', 'calm')",

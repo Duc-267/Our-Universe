@@ -20,3 +20,26 @@ insert into auth.users (id, raw_user_meta_data) values
 
 grant usage on schema auth to authenticated;
 grant execute on function auth.uid() to authenticated;
+
+-- Minimal Storage stand-in. The hosted project already has this schema; tests need
+-- the same tables so photo and capsule policies can be checked without Supabase.
+create schema if not exists storage;
+create table if not exists storage.buckets (
+  id text primary key,
+  name text not null,
+  public boolean not null default false,
+  file_size_limit bigint,
+  allowed_mime_types text[]
+);
+create table if not exists storage.objects (
+  id uuid primary key,
+  bucket_id text not null,
+  name text not null,
+  owner uuid,
+  owner_id text,
+  unique (bucket_id, name)
+);
+alter table storage.objects enable row level security;
+grant usage on schema storage to authenticated;
+grant select on storage.buckets to authenticated;
+grant select, insert, delete on storage.objects to authenticated;

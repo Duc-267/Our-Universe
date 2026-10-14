@@ -1,11 +1,15 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { createMemory, updateMemory, type MemoryFormState } from "@/features/memory/actions";
+import { useRouter } from "next/navigation";
+import { useState, type FormEvent } from "react";
+import { createMemory, deleteMemoryPhoto, updateMemory } from "@/features/memory/actions";
 import { MEMORY_CATEGORIES } from "@/features/memory/categories";
 import { iconForCategory, isMemoryIcon, MEMORY_ICONS, memoryIcon } from "@/features/memory/icons";
+import { preparePhoto } from "@/features/media/prepare";
+import { uploadMemoryPhoto } from "@/features/media/upload";
+import { createClient } from "@/lib/supabase/client";
+import { PhotoField, type ExistingPhoto } from "./photo-field";
 
-const initialState: MemoryFormState = { error: null };
 const IMPORTANCE_CHOICES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export type MemoryFormValues = {
@@ -25,26 +29,60 @@ function categoryLabel(category: string): string {
 
 export function MemoryForm({
   mode,
+  coupleId,
   memory,
   defaultDate,
+  existingPhotos = [],
 }: {
   mode: "create" | "edit";
+  coupleId: string;
   memory?: MemoryFormValues;
   defaultDate?: string;
+  existingPhotos?: ExistingPhoto[];
 }) {
-  const [state, formAction, pending] = useActionState(
-    mode === "create" ? createMemory : updateMemory,
-    initialState,
-  );
+  const router = useRouter();
   const initialCategory = memory?.category ?? "everyday";
   const [category, setCategory] = useState(initialCategory);
   const [icon, setIcon] = useState(
     memory?.icon && isMemoryIcon(memory.icon) ? memory.icon : iconForCategory(initialCategory),
   );
   const [iconTouched, setIconTouched] = useState(Boolean(memory?.icon));
+  const [files, setFiles] = useState<File[]>([]);
+  const [photos, setPhotos] = useState(existingPhotos);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError(null);
+    const save = mode === "create" ? createMemory : updateMemory;
+    const saved = await save({ error: null, memoryId: null }, new FormData(event.currentTarget));
+    if (saved.error || !saved.memoryId) {
+      setError(saved.error ?? "Could not save this memory.");
+      setPending(false);
+      return;
+    }
+    const failures: string[] = [];
+    for (const file of files) {
+      try {
+        const prepared = await preparePhoto(file);
+        await uploadMemoryPhoto(createClient(), coupleId, saved.memoryId, prepared);
+      } catch (uploadError) {
+        failures.push(uploadError instanceof Error ? uploadError.message : "Could not attach a photo.");
+      }
+    }
+    if (failures.length > 0) {
+      setError(`The memory was saved. ${failures[0]}`);
+      setPending(false);
+      return;
+    }
+    router.push(`/universe?star=${saved.memoryId}`);
+    router.refresh();
+  }
 
   return (
-    <form action={formAction} className="form-stack">
+    <form onSubmit={onSubmit} className="form-stack">
       {mode === "edit" && memory?.id && (
         <input type="hidden" name="memory_id" value={memory.id} />
       )}
@@ -120,10 +158,24 @@ export function MemoryForm({
         ))}
       </select>
       <p className="field-help">Memories marked 8 or higher shine as bright stars.</p>
+      <PhotoField
+        files={files}
+        onFiles={setFiles}
+        existing={photos}
+        max={6}
+        onRemoveExisting={async (photoId) => {
+          const removed = await deleteMemoryPhoto(photoId);
+          if (removed.error) {
+            setError(removed.error);
+            return;
+          }
+          setPhotos((current) => current.filter((photo) => photo.id !== photoId));
+        }}
+      />
       <button className="primary-button" type="submit" disabled={pending}>
         {pending ? "Saving…" : mode === "create" ? "Save memory" : "Save changes"}
       </button>
-      {state.error && <p className="form-error" role="alert">{state.error}</p>}
+      {error && <p className="form-error" role="alert">{error}</p>}
     </form>
   );
 }

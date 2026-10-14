@@ -20,10 +20,25 @@ export type SceneStar = {
   icon: string;
 };
 
+export type SceneCapsule = {
+  id: string;
+  title: string;
+  state: "locked" | "ready" | "open";
+  positionX: number;
+  positionY: number;
+  positionZ: number;
+  scale: number;
+  rotation: number;
+  visualSeed: number;
+};
+
+type SceneTarget = { kind: "star" | "capsule"; id: string };
+
 type Props = {
   stars: SceneStar[];
+  capsules: SceneCapsule[];
   selectedId: string | null;
-  onSelect: (memoryId: string | null) => void;
+  onSelect: (target: SceneTarget | null) => void;
   sky: CoupleSky;
   bornId: string | null;
   cheer: "star" | "checkin" | null;
@@ -142,10 +157,11 @@ function makeMoon(): HTMLCanvasElement {
   return moon;
 }
 
-export function UniverseScene({ stars, selectedId, onSelect, sky, bornId, cheer }: Props) {
+export function UniverseScene({ stars, capsules, selectedId, onSelect, sky, bornId, cheer }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frontRef = useRef<HTMLCanvasElement>(null);
   const starsRef = useRef(stars);
+  const capsulesRef = useRef(capsules);
   const selectedRef = useRef(selectedId);
   const selectRef = useRef(onSelect);
   const skyRef = useRef(sky);
@@ -158,6 +174,7 @@ export function UniverseScene({ stars, selectedId, onSelect, sky, bornId, cheer 
   );
   useEffect(() => {
     starsRef.current = stars;
+    capsulesRef.current = capsules;
     selectedRef.current = selectedId;
     selectRef.current = onSelect;
     skyRef.current = sky;
@@ -258,18 +275,30 @@ export function UniverseScene({ stars, selectedId, onSelect, sky, bornId, cheer 
       };
     };
 
-    const hitTest = (px: number, py: number): SceneStar | null => {
-      let best: SceneStar | null = null;
+    const projectCapsule = (capsule: SceneCapsule) => {
+      const point = projectPoint(capsule.positionX, capsule.positionY, capsule.positionZ, 1, 0);
+      if (!point) return null;
+      const base = Math.max(16, capsule.scale * 5.2 * (focal() / point.depth));
+      return { capsule, x: point.x, y: point.y, depth: point.depth, r: base };
+    };
+
+    const hitTest = (px: number, py: number): SceneTarget | null => {
+      let best: SceneTarget | null = null;
       let bestDistance = Number.POSITIVE_INFINITY;
-      for (const star of starsRef.current) {
-        const projected = projectStar(star);
-        if (!projected) continue;
-        const distance = Math.hypot(px - projected.x, py - projected.y);
-        const hitRadius = Math.max(16, projected.r + 6);
-        if (distance <= hitRadius && distance < bestDistance) {
-          best = star;
+      const consider = (id: string, kind: SceneTarget["kind"], x: number, y: number, radius: number) => {
+        const distance = Math.hypot(px - x, py - y);
+        if (distance <= Math.max(16, radius + 6) && distance < bestDistance) {
+          best = { kind, id };
           bestDistance = distance;
         }
+      };
+      for (const star of starsRef.current) {
+        const projected = projectStar(star);
+        if (projected) consider(star.memoryId, "star", projected.x, projected.y, projected.r);
+      }
+      for (const capsule of capsulesRef.current) {
+        const projected = projectCapsule(capsule);
+        if (projected) consider(capsule.id, "capsule", projected.x, projected.y, projected.r);
       }
       return best;
     };
@@ -508,6 +537,58 @@ export function UniverseScene({ stars, selectedId, onSelect, sky, bornId, cheer 
       }
     };
 
+    const drawCapsule = (entry: NonNullable<ReturnType<typeof projectCapsule>>, time: number) => {
+      const { capsule, x, y, r } = entry;
+      const reduced = reducedMotion.matches;
+      const angle = -2.4 + capsule.rotation;
+      const tail = r * (capsule.state === "open" ? 1.5 : 3);
+      const rgb = capsule.state === "locked" ? "186, 214, 255" : "255, 210, 58";
+      ctx.save();
+      ctx.globalAlpha = clamp(1.2 - entry.depth / (cam.dist + 110), 0.55, 1);
+      ctx.strokeStyle = `rgba(${rgb}, 0.9)`;
+      ctx.lineWidth = Math.max(2, r * 0.34);
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + Math.cos(angle) * tail, y + Math.sin(angle) * tail);
+      ctx.stroke();
+      if (capsule.state === "open") {
+        paintIconSticker(ctx, "letter", x, y, r * 2.5, "#fff1c2", STICKER_INK);
+      } else {
+        ctx.fillStyle = capsule.state === "locked" ? "#d7e6ff" : "#fff1c2";
+        ctx.strokeStyle = STICKER_INK;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, r * 0.42, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        if (capsule.state === "ready") {
+          const pulse = reduced ? 1 : 0.65 + 0.35 * Math.sin(time / 280);
+          drawSparkle(x, y - r * 0.95, r * 0.28 * pulse, "#ffd23a", 1);
+        }
+      }
+      if (capsule.id === bornKey && !reduced) {
+        const age = (time - bornStamp) / 900;
+        if (age >= 0 && age < 1) {
+          drawSparkle(x - r, y - r, r * 0.3 * (1 - age), "#fff1c2", 1 - age);
+          drawSparkle(x + r, y, r * 0.24 * (1 - age), "#ffd23a", 1 - age);
+        }
+      }
+      if (capsule.id === selectedRef.current) {
+        ctx.strokeStyle = CREAM;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([6, 6]);
+        ctx.lineDashOffset = reduced ? 0 : -time / 60;
+        ctx.beginPath();
+        ctx.arc(x, y, r * 1.35, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+      if (capsule.id === hoverId || capsule.id === selectedRef.current) {
+        labels.push({ x, y: y - r * 1.4, text: capsule.title });
+      }
+    };
+
     const placeDuck = (time: number) => {
       const node = duckRef.current;
       const motion = duckMotionRef.current;
@@ -542,10 +623,16 @@ export function UniverseScene({ stars, selectedId, onSelect, sky, bornId, cheer 
         bornStamp = time;
       }
       const centerDepth = projectPoint(0, 0, 0, 1, 0)?.depth ?? cam.dist;
-      const projected = starsRef.current
-        .map((star) => projectStar(star))
-        .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
-        .sort((a, b) => b.depth - a.depth);
+      const projected = [
+        ...starsRef.current
+          .map((star) => projectStar(star))
+          .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+          .map((entry) => ({ depth: entry.depth, paint: () => drawSticker(entry, time) })),
+        ...capsulesRef.current
+          .map((capsule) => projectCapsule(capsule))
+          .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+          .map((entry) => ({ depth: entry.depth, paint: () => drawCapsule(entry, time) })),
+      ].sort((a, b) => b.depth - a.depth);
       labels.length = 0;
 
       ctx = backCtx;
@@ -555,14 +642,14 @@ export function UniverseScene({ stars, selectedId, onSelect, sky, bornId, cheer 
       drawHalo();
       drawOrbit(time, false, centerDepth);
       drawMotes(time, false, centerDepth);
-      for (const entry of projected) if (entry.depth >= centerDepth) drawSticker(entry, time);
+      for (const entry of projected) if (entry.depth >= centerDepth) entry.paint();
 
       ctx = frontCtx;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
       drawOrbit(time, true, centerDepth);
       drawMotes(time, true, centerDepth);
-      for (const entry of projected) if (entry.depth < centerDepth) drawSticker(entry, time);
+      for (const entry of projected) if (entry.depth < centerDepth) entry.paint();
       for (const label of labels) drawLabel(label.x, label.y, label.text);
       placeDuck(time);
       raf = requestAnimationFrame(draw);
@@ -591,7 +678,7 @@ export function UniverseScene({ stars, selectedId, onSelect, sky, bornId, cheer 
       const point = canvasPoint(event);
       if (!pointers.has(event.pointerId)) {
         const hit = hitTest(point.x, point.y);
-        hoverId = hit ? hit.memoryId : null;
+        hoverId = hit ? hit.id : null;
         canvas.style.cursor = hit ? "pointer" : "grab";
         return;
       }
@@ -619,8 +706,7 @@ export function UniverseScene({ stars, selectedId, onSelect, sky, bornId, cheer 
       lastInteraction = performance.now();
       if (wasClick) {
         const point = canvasPoint(event);
-        const hit = hitTest(point.x, point.y);
-        selectRef.current(hit ? hit.memoryId : null);
+        selectRef.current(hitTest(point.x, point.y));
       }
     };
 
@@ -697,7 +783,7 @@ export function UniverseScene({ stars, selectedId, onSelect, sky, bornId, cheer 
         ref={canvasRef}
         tabIndex={0}
         role="img"
-        aria-label="Universe scene with your duck and memory stars. Arrow keys rotate the view, plus and minus zoom, and the star list below opens each memory."
+        aria-label="Universe scene with your duck, memory stars, and capsules. Arrow keys rotate the view, plus and minus zoom, and the lists below open each memory or capsule."
       />
       <canvas ref={frontRef} className="universe-front" aria-hidden="true" />
       <div ref={duckRef} className="universe-mascot" style={{ visibility: "hidden" }}>

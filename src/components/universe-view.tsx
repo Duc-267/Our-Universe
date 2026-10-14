@@ -7,11 +7,12 @@ import { useActionState } from "react";
 import { CheckInPanel, type CheckinRow } from "@/components/check-in-panel";
 import type { RelationshipAge } from "@/features/couple/age";
 import type { CoupleSky } from "@/features/checkin/weather";
+import { deleteCapsule, openCapsule } from "@/features/capsule/actions";
 import { deleteMemory, type DeleteMemoryState } from "@/features/memory/actions";
 import { memoryIcon } from "@/features/memory/icons";
 import { categoryColor, STICKER_INK } from "@/features/memory/palette";
 import { createClient } from "@/lib/supabase/client";
-import { UniverseScene, type SceneStar } from "./universe-scene";
+import { UniverseScene, type SceneCapsule, type SceneStar } from "./universe-scene";
 
 export type UniverseMemory = {
   id: string;
@@ -22,6 +23,7 @@ export type UniverseMemory = {
   category: string;
   importance: number;
   icon: string;
+  photos: { id: string; thumbUrl: string; fullPath: string }[];
   authorName: string;
   isAuthor: boolean;
   star: {
@@ -36,12 +38,36 @@ export type UniverseMemory = {
   } | null;
 };
 
+export type UniverseCapsule = {
+  id: string;
+  creatorName: string;
+  isCreator: boolean;
+  unlockDate: string;
+  openedAt: string | null;
+  canOpen: boolean;
+  title: string | null;
+  message: string | null;
+  image: { thumbUrl: string; fullPath: string } | null;
+  comet: {
+    positionX: number;
+    positionY: number;
+    positionZ: number;
+    scale: number;
+    rotation: number;
+    visualSeed: number;
+  } | null;
+};
+
+type Selection = { kind: "star" | "capsule"; id: string } | null;
+
 type Props = {
   coupleId: string;
   memories: UniverseMemory[];
+  capsules: UniverseCapsule[];
   age: RelationshipAge;
   canInvite: boolean;
   initialSelectedId: string | null;
+  initialCapsuleId: string | null;
   today: string;
   checkins: CheckinRow[];
   sky: CoupleSky;
@@ -109,33 +135,46 @@ function categoryLabel(category: string): string {
   return category.charAt(0).toUpperCase() + category.slice(1);
 }
 
+function capsuleLabel(capsule: UniverseCapsule): string {
+  if (capsule.title) return capsule.title;
+  if (capsule.canOpen) return "Ready to open";
+  return `Locked until ${formatDate(capsule.unlockDate)}`;
+}
+
 export function UniverseView({
   coupleId,
   memories,
+  capsules,
   age,
   canInvite,
   initialSelectedId,
+  initialCapsuleId,
   today,
   checkins,
   sky,
 }: Props) {
   const router = useRouter();
-  const [selectedId, setSelectedId] = useState(initialSelectedId);
-  const [seenInitialId, setSeenInitialId] = useState(initialSelectedId);
-  const [bornId, setBornId] = useState<string | null>(initialSelectedId);
+  const initialSelection: Selection = initialSelectedId
+    ? { kind: "star", id: initialSelectedId }
+    : initialCapsuleId
+      ? { kind: "capsule", id: initialCapsuleId }
+      : null;
+  const [selected, setSelected] = useState<Selection>(initialSelection);
+  const [seenSelection, setSeenSelection] = useState(initialSelection?.id ?? null);
+  const [bornId, setBornId] = useState<string | null>(initialSelection?.id ?? null);
   const [cheer, setCheer] = useState<"star" | "checkin" | null>(initialSelectedId ? "star" : null);
   const knownIds = useRef<Set<string> | null>(null);
   const seenCheckins = useRef<string | null>(null);
 
-  // Adjust state during render when a navigation supplies a new ?star= target,
-  // so a freshly created or edited memory opens its dialog without an effect.
-  if (initialSelectedId !== seenInitialId) {
-    setSeenInitialId(initialSelectedId);
-    if (initialSelectedId) setSelectedId(initialSelectedId);
+  const selectionKey = initialSelection?.id ?? null;
+  // A new ?star= or ?capsule= target opens its dialog without waiting for an effect.
+  if (selectionKey !== seenSelection) {
+    setSeenSelection(selectionKey);
+    if (initialSelection) setSelected(initialSelection);
   }
 
   useEffect(() => {
-    const ids = memories.map((memory) => memory.id);
+    const ids = [...memories.map((memory) => memory.id), ...capsules.map((capsule) => capsule.id)];
     if (knownIds.current) {
       const fresh = ids.find((id) => !knownIds.current?.has(id));
       if (fresh) {
@@ -144,7 +183,7 @@ export function UniverseView({
       }
     }
     knownIds.current = new Set(ids);
-  }, [memories]);
+  }, [memories, capsules]);
 
   useEffect(() => {
     if (!bornId) return;
@@ -181,18 +220,33 @@ export function UniverseView({
         { event: "*", schema: "public", table: "daily_checkins", filter: `couple_id=eq.${coupleId}` },
         () => router.refresh(),
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "capsules", filter: `couple_id=eq.${coupleId}` },
+        () => router.refresh(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "memory_photos", filter: `couple_id=eq.${coupleId}` },
+        () => router.refresh(),
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
     };
   }, [coupleId, router]);
 
-  const selected = memories.find((memory) => memory.id === selectedId) ?? null;
+  const selectedMemory = selected?.kind === "star"
+    ? memories.find((memory) => memory.id === selected.id) ?? null
+    : null;
+  const selectedCapsule = selected?.kind === "capsule"
+    ? capsules.find((capsule) => capsule.id === selected.id) ?? null
+    : null;
   const isAnniversary = age.nextAnniversary?.daysAway === 0;
 
   const closeDetail = () => {
-    setSelectedId(null);
-    if (window.location.search.includes("star=")) {
+    setSelected(null);
+    if (window.location.search.includes("star=") || window.location.search.includes("capsule=")) {
       window.history.replaceState(null, "", "/universe");
     }
   };
@@ -213,6 +267,19 @@ export function UniverseView({
       category: memory.category,
       icon: memory.icon,
     }));
+  const sceneCapsules: SceneCapsule[] = capsules
+    .filter((capsule) => capsule.comet !== null)
+    .map((capsule) => ({
+      id: capsule.id,
+      title: capsuleLabel(capsule),
+      state: capsule.openedAt ? "open" : capsule.canOpen ? "ready" : "locked",
+      positionX: capsule.comet!.positionX,
+      positionY: capsule.comet!.positionY,
+      positionZ: capsule.comet!.positionZ,
+      scale: capsule.comet!.scale,
+      rotation: capsule.comet!.rotation,
+      visualSeed: capsule.comet!.visualSeed,
+    }));
 
   return (
     <div className="universe-shell">
@@ -221,8 +288,9 @@ export function UniverseView({
         <div className="universe-stage">
           <UniverseScene
             stars={sceneStars}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
+            capsules={sceneCapsules}
+            selectedId={selected?.id ?? null}
+            onSelect={setSelected}
             sky={sky}
             bornId={bornId}
             cheer={cheer}
@@ -235,8 +303,9 @@ export function UniverseView({
             <Link className="primary-button universe-add" href="/memory/new">
               <span aria-hidden="true">✦</span> Add a memory
             </Link>
+            <Link className="universe-seal" href="/capsule/new">Seal a capsule</Link>
           </div>
-          {memories.length === 0 && (
+          {memories.length === 0 && capsules.length === 0 && (
             <section className="universe-empty-overlay" aria-labelledby="universe-title">
               <div className="universe-empty-card">
                 <TwinStarIcon />
@@ -266,8 +335,8 @@ export function UniverseView({
                 <button
                   type="button"
                   className="star-option"
-                  aria-current={memory.id === selectedId ? "true" : undefined}
-                  onClick={() => setSelectedId(memory.id)}
+                  aria-current={selected?.kind === "star" && memory.id === selected.id ? "true" : undefined}
+                  onClick={() => setSelected({ kind: "star", id: memory.id })}
                 >
                   <StarSticker
                     id={memory.icon}
@@ -278,16 +347,88 @@ export function UniverseView({
                     <span className="star-option-title">{memory.title}</span>
                     <span className="star-option-meta">
                       {formatDate(memory.memoryDate)} · {categoryLabel(memory.category)}
+                      {memory.photos.length > 0 ? ` · ${memory.photos.length} ${memory.photos.length === 1 ? "photo" : "photos"}` : ""}
                     </span>
                   </span>
+                  {memory.photos[0]?.thumbUrl && (
+                    <img className="star-thumb" src={memory.photos[0].thumbUrl} alt="" />
+                  )}
                 </button>
               </li>
             ))}
           </ul>
         </section>
       )}
-      {selected && <MemoryDialog memory={selected} onClose={closeDetail} />}
+      {capsules.length > 0 && (
+        <section className="universe-list" aria-labelledby="universe-capsules-heading">
+          <div className="universe-list-head">
+            <h2 id="universe-capsules-heading">Capsules</h2>
+            <p className="universe-count">Messages waiting in the distance</p>
+          </div>
+          <ul className="star-list">
+            {capsules.map((capsule) => (
+              <li key={capsule.id}>
+                <button
+                  type="button"
+                  className="star-option"
+                  aria-current={selected?.kind === "capsule" && capsule.id === selected.id ? "true" : undefined}
+                  onClick={() => setSelected({ kind: "capsule", id: capsule.id })}
+                >
+                  <span className={`capsule-mark is-${capsule.openedAt ? "open" : capsule.canOpen ? "ready" : "locked"}`} aria-hidden="true" />
+                  <span className="star-option-text">
+                    <span className="star-option-title">{capsuleLabel(capsule)}</span>
+                    <span className="star-option-meta">
+                      {capsule.openedAt ? `Opened ${formatDate(capsule.openedAt.slice(0, 10))}` : `Unlocks ${formatDate(capsule.unlockDate)}`}
+                      {" · "}sealed by {capsule.creatorName}
+                    </span>
+                  </span>
+                  {capsule.image?.thumbUrl && <img className="star-thumb" src={capsule.image.thumbUrl} alt="" />}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {selectedMemory && <MemoryDialog memory={selectedMemory} onClose={closeDetail} />}
+      {selectedCapsule && <CapsuleDialog capsule={selectedCapsule} onClose={closeDetail} />}
     </div>
+  );
+}
+
+function PhotoStrip({ photos }: { photos: UniverseMemory["photos"] }) {
+  const [fullUrl, setFullUrl] = useState<string | null>(null);
+  const [fullError, setFullError] = useState<string | null>(null);
+
+  if (photos.length === 0) return null;
+  return (
+    <>
+      <ul className="photo-grid">
+        {photos.map((photo, index) => (
+          <li key={photo.id}>
+            <button
+              type="button"
+              onClick={async () => {
+                setFullError(null);
+                const { data, error } = await createClient()
+                  .storage.from("universe-media")
+                  .createSignedUrl(photo.fullPath, 120);
+                if (error || !data?.signedUrl) setFullError("Could not open this photo.");
+                else setFullUrl(data.signedUrl);
+              }}
+            >
+              {photo.thumbUrl ? <img src={photo.thumbUrl} alt={`Photo ${index + 1} from this memory`} /> : <span>Photo</span>}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {fullError && <p className="form-error" role="alert">{fullError}</p>}
+      {fullUrl && (
+        <div className="photo-full-wrap">
+          <button type="button" className="text-button" onClick={() => setFullUrl(null)}>Close photo</button>
+          <img src={fullUrl} alt="Full size memory photo" />
+        </div>
+      )}
+    </>
   );
 }
 
@@ -333,6 +474,7 @@ function MemoryDialog({ memory, onClose }: { memory: UniverseMemory; onClose: ()
           <span className="memory-chip">{memoryIcon(memory.icon).label}</span>
         </div>
         {memory.description && <p className="memory-dialog-description">{memory.description}</p>}
+        <PhotoStrip photos={memory.photos} />
         {memory.locationText && (
           <p className="memory-dialog-location">Location: {memory.locationText}</p>
         )}
@@ -357,6 +499,97 @@ function MemoryDialog({ memory, onClose }: { memory: UniverseMemory; onClose: ()
           </div>
         )}
         {state.error && <p className="form-error" role="alert">{state.error}</p>}
+      </article>
+    </dialog>
+  );
+}
+
+function CapsuleDialog({ capsule, onClose }: { capsule: UniverseCapsule; onClose: () => void }) {
+  const router = useRouter();
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const [fullUrl, setFullUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    dialogRef.current?.showModal();
+  }, []);
+
+  const locked = !capsule.title;
+  return (
+    <dialog
+      ref={dialogRef}
+      className="memory-dialog"
+      aria-labelledby="capsule-dialog-title"
+      onClose={onClose}
+      onClick={(event) => {
+        if (event.target === dialogRef.current) onClose();
+      }}
+    >
+      <article className="memory-dialog-body">
+        <div className="memory-dialog-head">
+          <span className={`capsule-mark is-${capsule.openedAt ? "open" : capsule.canOpen ? "ready" : "locked"}`} aria-hidden="true" />
+          <h2 id="capsule-dialog-title">{locked ? `Locked until ${formatDate(capsule.unlockDate)}` : capsule.title}</h2>
+          <button type="button" className="text-button" onClick={() => dialogRef.current?.close()}>Close</button>
+        </div>
+        <p className="memory-dialog-meta">Sealed by {capsule.creatorName}</p>
+        {locked ? (
+          <p className="memory-dialog-description">Locked until {formatDate(capsule.unlockDate)}.</p>
+        ) : (
+          <>
+            <p className="memory-dialog-description">{capsule.message}</p>
+            {capsule.image?.thumbUrl && (
+              <button
+                type="button"
+                className="photo-open"
+                onClick={async () => {
+                  const { data } = await createClient().storage.from("universe-media").createSignedUrl(capsule.image!.fullPath, 120);
+                  if (data?.signedUrl) setFullUrl(data.signedUrl);
+                  else setError("Could not open this photo.");
+                }}
+              >
+                <img src={capsule.image.thumbUrl} alt="Capsule photo" />
+              </button>
+            )}
+            {fullUrl && <img className="photo-full" src={fullUrl} alt="Full size capsule photo" />}
+          </>
+        )}
+        <div className="memory-dialog-actions">
+          {capsule.canOpen && (
+            <button
+              type="button"
+              className="primary-button"
+              disabled={pending}
+              onClick={async () => {
+                setPending(true);
+                const opened = await openCapsule(capsule.id);
+                setPending(false);
+                if (opened.error) setError(opened.error);
+                else router.refresh();
+              }}
+            >
+              {pending ? "Opening…" : "Open capsule"}
+            </button>
+          )}
+          {capsule.isCreator && !capsule.openedAt && (
+            <button
+              type="button"
+              className="text-button danger-button"
+              disabled={pending}
+              onClick={async () => {
+                setPending(true);
+                const removed = await deleteCapsule(capsule.id);
+                if (removed.error) {
+                  setError(removed.error);
+                  setPending(false);
+                } else onClose();
+              }}
+            >
+              Remove sealed capsule
+            </button>
+          )}
+        </div>
+        {error && <p className="form-error" role="alert">{error}</p>}
       </article>
     </dialog>
   );

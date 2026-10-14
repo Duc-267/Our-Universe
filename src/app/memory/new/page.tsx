@@ -25,7 +25,7 @@ export default async function NewMemoryPage() {
         <Link className="back-link" href="/universe">← Back to universe</Link>
         <h1>Add a memory</h1>
         <p className="form-intro">Every memory you save becomes a star in your universe.</p>
-        <MemoryForm mode="create" defaultDate={todayInZone(settings.data.timezone)} />
+        <MemoryForm mode="create" coupleId={coupleId} defaultDate={todayInZone(settings.data.timezone)} />
       </section>
     </main>
   );
