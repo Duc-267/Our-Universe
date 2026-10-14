@@ -32,6 +32,5 @@ Let both partners share one mood for the local day, see each other's check-in, a
 
 ## Out of scope
 
-- Check-in photos.
-- Same Moment, blind mode, Twin Stars, and Same Moment history (Epics 2.5–2.7).
+- Check-in photos, Same Moment, Twin Stars, and Same Moment history are delivered by `docs/requirements/phase-2-same-moment.md`.
 - Secret capsules, quests, and AI summaries.

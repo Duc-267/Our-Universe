@@ -32,11 +32,24 @@ export type SceneCapsule = {
   visualSeed: number;
 };
 
-type SceneTarget = { kind: "star" | "capsule"; id: string };
+export type SceneTwin = {
+  momentId: string;
+  title: string;
+  slot: number;
+  positionX: number;
+  positionY: number;
+  positionZ: number;
+  scale: number;
+  rotation: number;
+  visualSeed: number;
+};
+
+type SceneTarget = { kind: "star" | "capsule" | "moment"; id: string };
 
 type Props = {
   stars: SceneStar[];
   capsules: SceneCapsule[];
+  twins: SceneTwin[];
   selectedId: string | null;
   onSelect: (target: SceneTarget | null) => void;
   sky: CoupleSky;
@@ -157,11 +170,12 @@ function makeMoon(): HTMLCanvasElement {
   return moon;
 }
 
-export function UniverseScene({ stars, capsules, selectedId, onSelect, sky, bornId, cheer }: Props) {
+export function UniverseScene({ stars, capsules, twins, selectedId, onSelect, sky, bornId, cheer }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frontRef = useRef<HTMLCanvasElement>(null);
   const starsRef = useRef(stars);
   const capsulesRef = useRef(capsules);
+  const twinsRef = useRef(twins);
   const selectedRef = useRef(selectedId);
   const selectRef = useRef(onSelect);
   const skyRef = useRef(sky);
@@ -175,6 +189,7 @@ export function UniverseScene({ stars, capsules, selectedId, onSelect, sky, born
   useEffect(() => {
     starsRef.current = stars;
     capsulesRef.current = capsules;
+    twinsRef.current = twins;
     selectedRef.current = selectedId;
     selectRef.current = onSelect;
     skyRef.current = sky;
@@ -282,6 +297,13 @@ export function UniverseScene({ stars, capsules, selectedId, onSelect, sky, born
       return { capsule, x: point.x, y: point.y, depth: point.depth, r: base };
     };
 
+    const projectTwin = (twin: SceneTwin) => {
+      const point = projectPoint(twin.positionX, twin.positionY, twin.positionZ, 1, 0);
+      if (!point) return null;
+      const base = Math.max(14, twin.scale * 4.6 * (focal() / point.depth));
+      return { twin, x: point.x, y: point.y, depth: point.depth, r: base };
+    };
+
     const hitTest = (px: number, py: number): SceneTarget | null => {
       let best: SceneTarget | null = null;
       let bestDistance = Number.POSITIVE_INFINITY;
@@ -299,6 +321,10 @@ export function UniverseScene({ stars, capsules, selectedId, onSelect, sky, born
       for (const capsule of capsulesRef.current) {
         const projected = projectCapsule(capsule);
         if (projected) consider(capsule.id, "capsule", projected.x, projected.y, projected.r);
+      }
+      for (const twin of twinsRef.current) {
+        const projected = projectTwin(twin);
+        if (projected) consider(twin.momentId, "moment", projected.x, projected.y, projected.r);
       }
       return best;
     };
@@ -589,6 +615,55 @@ export function UniverseScene({ stars, capsules, selectedId, onSelect, sky, born
       }
     };
 
+    const drawTwin = (entry: NonNullable<ReturnType<typeof projectTwin>>, time: number) => {
+      const { twin, x, y, r } = entry;
+      const reduced = reducedMotion.matches;
+      const pulse = reduced ? 1 : 0.75 + 0.25 * Math.sin(time / 700 + twin.slot);
+      ctx.save();
+      ctx.globalAlpha = clamp(1.2 - entry.depth / (cam.dist + 110), 0.55, 1);
+      ctx.fillStyle = twin.slot === 1 ? "#ff8fab" : "#ffd23a";
+      ctx.strokeStyle = STICKER_INK;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.55 * pulse, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      drawSparkle(x, y, r * 0.35, CREAM, 0.9);
+      if (twin.momentId === selectedRef.current) {
+        ctx.strokeStyle = CREAM;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.arc(x, y, r * 1.35, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+      if (twin.momentId === hoverId || twin.momentId === selectedRef.current) {
+        labels.push({ x, y: y - r * 1.4, text: twin.title });
+      }
+    };
+
+    const drawTwinLinks = (projectedTwins: NonNullable<ReturnType<typeof projectTwin>>[]) => {
+      const byMoment = new Map<string, NonNullable<ReturnType<typeof projectTwin>>[]>();
+      for (const entry of projectedTwins) {
+        const list = byMoment.get(entry.twin.momentId) ?? [];
+        list.push(entry);
+        byMoment.set(entry.twin.momentId, list);
+      }
+      ctx.save();
+      ctx.strokeStyle = "rgba(255, 143, 171, 0.75)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 6]);
+      for (const pair of byMoment.values()) {
+        if (pair.length < 2) continue;
+        ctx.beginPath();
+        ctx.moveTo(pair[0].x, pair[0].y);
+        ctx.lineTo(pair[1].x, pair[1].y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    };
+
     const placeDuck = (time: number) => {
       const node = duckRef.current;
       const motion = duckMotionRef.current;
@@ -623,6 +698,9 @@ export function UniverseScene({ stars, capsules, selectedId, onSelect, sky, born
         bornStamp = time;
       }
       const centerDepth = projectPoint(0, 0, 0, 1, 0)?.depth ?? cam.dist;
+      const twinEntries = twinsRef.current
+        .map((twin) => projectTwin(twin))
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
       const projected = [
         ...starsRef.current
           .map((star) => projectStar(star))
@@ -632,6 +710,7 @@ export function UniverseScene({ stars, capsules, selectedId, onSelect, sky, born
           .map((capsule) => projectCapsule(capsule))
           .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
           .map((entry) => ({ depth: entry.depth, paint: () => drawCapsule(entry, time) })),
+        ...twinEntries.map((entry) => ({ depth: entry.depth, paint: () => drawTwin(entry, time) })),
       ].sort((a, b) => b.depth - a.depth);
       labels.length = 0;
 
@@ -642,6 +721,7 @@ export function UniverseScene({ stars, capsules, selectedId, onSelect, sky, born
       drawHalo();
       drawOrbit(time, false, centerDepth);
       drawMotes(time, false, centerDepth);
+      drawTwinLinks(twinEntries.filter((entry) => entry.depth >= centerDepth));
       for (const entry of projected) if (entry.depth >= centerDepth) entry.paint();
 
       ctx = frontCtx;
@@ -649,6 +729,7 @@ export function UniverseScene({ stars, capsules, selectedId, onSelect, sky, born
       ctx.clearRect(0, 0, width, height);
       drawOrbit(time, true, centerDepth);
       drawMotes(time, true, centerDepth);
+      drawTwinLinks(twinEntries.filter((entry) => entry.depth < centerDepth));
       for (const entry of projected) if (entry.depth < centerDepth) entry.paint();
       for (const label of labels) drawLabel(label.x, label.y, label.text);
       placeDuck(time);

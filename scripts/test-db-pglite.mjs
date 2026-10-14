@@ -35,6 +35,7 @@ try {
   await database.exec(readFileSync("supabase/migrations/20261013231000_memory_icons.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261013233000_phase2_checkins.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261014140000_phase1_photos_capsules.sql", "utf8"));
+  await database.exec(readFileSync("supabase/migrations/20261014153000_phase2_same_moment.sql", "utf8"));
   await query("insert into public.profiles (id, display_name) select id, raw_user_meta_data ->> 'display_name' from auth.users");
   await query(
     "insert into auth.users(id, raw_user_meta_data) values ($1, $2::jsonb)",
@@ -331,6 +332,36 @@ try {
   await asUser(userIds.casey);
   assert.equal((await query("select count(*)::int as n from public.capsules where id = $1", [capsuleId]))[0].n, 0);
   assert.equal((await query("select count(*)::int as n from public.capsule_contents where capsule_id = $1", [capsuleId]))[0].n, 0);
+
+  await asUser(userIds.alex);
+  const [{ start_same_moment: momentId }] = await query("select public.start_same_moment($1)", [true]);
+  await rejected(() => query("select public.start_same_moment($1)", [true]), "only one open same moment");
+  const alexMomentBase = `${coupleA}/moments/${momentId}/${userIds.alex}/`;
+  await asOwner();
+  await query(
+    `insert into storage.objects (id, bucket_id, name, owner_id) values
+      (gen_random_uuid(), 'universe-media', $1, $2),
+      (gen_random_uuid(), 'universe-media', $3, $2)`,
+    [`${alexMomentBase}full.webp`, userIds.alex, `${alexMomentBase}thumb.webp`],
+  );
+  await asUser(userIds.alex);
+  await query("select public.submit_same_moment($1, 'webp', 800, 600, 'Alex side')", [momentId]);
+  await asUser(userIds.blair);
+  assert.equal((await query("select count(*)::int as n from public.same_moment_submissions where same_moment_id = $1", [momentId]))[0].n, 0);
+  const blairMomentBase = `${coupleA}/moments/${momentId}/${userIds.blair}/`;
+  await asOwner();
+  await query(
+    `insert into storage.objects (id, bucket_id, name, owner_id) values
+      (gen_random_uuid(), 'universe-media', $1, $2),
+      (gen_random_uuid(), 'universe-media', $3, $2)`,
+    [`${blairMomentBase}full.webp`, userIds.blair, `${blairMomentBase}thumb.webp`],
+  );
+  await asUser(userIds.blair);
+  await query("select public.submit_same_moment($1, 'webp', 720, 540, 'Blair side')", [momentId]);
+  assert.equal((await query("select status from public.same_moments where id = $1", [momentId]))[0].status, "complete");
+  assert.equal((await query("select count(*)::int as n from public.cosmic_objects where same_moment_id = $1", [momentId]))[0].n, 2);
+  assert.equal((await query("select count(*)::int as n from public.same_moment_submissions where same_moment_id = $1", [momentId]))[0].n, 2);
+
   await rejected(
     () => query(
       "insert into public.daily_checkins (couple_id, author_user_id, local_date, mood) values ($1, $2, '2024-01-01', 'calm')",

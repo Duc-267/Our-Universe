@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
 import { UniverseView, type UniverseCapsule, type UniverseMemory } from "@/components/universe-view";
+import type { SameMomentRow } from "@/components/same-moment-panel";
 import { todayInZone, computeRelationshipAge } from "@/features/couple/age";
 import { skyFromMoods } from "@/features/checkin/weather";
 import { signedUrlMap } from "@/features/media/urls";
@@ -9,56 +10,73 @@ import { currentCoupleId, requireUser } from "@/lib/auth";
 export default async function UniversePage({
   searchParams,
 }: {
-  searchParams: Promise<{ star?: string; capsule?: string }>;
+  searchParams: Promise<{ star?: string; capsule?: string; moment?: string }>;
 }) {
   const { supabase, userId } = await requireUser();
   const coupleId = await currentCoupleId(supabase, userId);
   if (!coupleId) redirect("/couple/new");
 
-  const [couple, settings, members, memories, photos, objects, capsules, contents, checkins] = await Promise.all([
-    supabase
-      .from("couples")
-      .select("name, created_by, relationship_start_date")
-      .eq("id", coupleId)
-      .single(),
-    supabase.from("couple_settings").select("timezone").eq("couple_id", coupleId).single(),
-    supabase.from("couple_members").select("user_id").eq("couple_id", coupleId),
-    supabase
-      .from("memories")
-      .select(
-        "id, title, memory_date, description, location_text, category, importance, icon, author_user_id",
-      )
-      .eq("couple_id", coupleId)
-      .order("memory_date", { ascending: false })
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("memory_photos")
-      .select("id, memory_id, thumb_path, full_path, created_at")
-      .eq("couple_id", coupleId)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("cosmic_objects")
-      .select(
-        "memory_id, capsule_id, object_type, position_x, position_y, position_z, scale, brightness, rotation, visual_seed",
-      )
-      .eq("couple_id", coupleId)
-      .in("object_type", ["STAR", "BRIGHT_STAR", "COMET"]),
-    supabase
-      .from("capsules")
-      .select("id, creator_user_id, unlock_date, unlock_at, opened_at, created_at")
-      .eq("couple_id", coupleId)
-      .order("unlock_at", { ascending: true }),
-    supabase
-      .from("capsule_contents")
-      .select("capsule_id, title, message, image_thumb_path, image_full_path")
-      .eq("couple_id", coupleId),
-    supabase
-      .from("daily_checkins")
-      .select("id, author_user_id, local_date, mood, note, updated_at")
-      .eq("couple_id", coupleId)
-      .order("local_date", { ascending: false })
-      .order("updated_at", { ascending: false }),
-  ]);
+  await supabase.rpc("refresh_same_moments");
+
+  const [couple, settings, members, memories, photos, objects, capsules, contents, checkins, moments, submissions] =
+    await Promise.all([
+      supabase
+        .from("couples")
+        .select("name, created_by, relationship_start_date")
+        .eq("id", coupleId)
+        .single(),
+      supabase.from("couple_settings").select("timezone").eq("couple_id", coupleId).single(),
+      supabase.from("couple_members").select("user_id").eq("couple_id", coupleId),
+      supabase
+        .from("memories")
+        .select(
+          "id, title, memory_date, description, location_text, category, importance, icon, author_user_id",
+        )
+        .eq("couple_id", coupleId)
+        .order("memory_date", { ascending: false })
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("memory_photos")
+        .select("id, memory_id, thumb_path, full_path, created_at")
+        .eq("couple_id", coupleId)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("cosmic_objects")
+        .select(
+          "memory_id, capsule_id, same_moment_id, twin_slot, object_type, position_x, position_y, position_z, scale, brightness, rotation, visual_seed",
+        )
+        .eq("couple_id", coupleId)
+        .in("object_type", ["STAR", "BRIGHT_STAR", "COMET", "TWIN_STAR"]),
+      supabase
+        .from("capsules")
+        .select("id, creator_user_id, unlock_date, unlock_at, opened_at, created_at")
+        .eq("couple_id", coupleId)
+        .order("unlock_at", { ascending: true }),
+      supabase
+        .from("capsule_contents")
+        .select("capsule_id, title, message, image_thumb_path, image_full_path")
+        .eq("couple_id", coupleId),
+      supabase
+        .from("daily_checkins")
+        .select(
+          "id, author_user_id, local_date, mood, note, updated_at, image_thumb_path, image_full_path",
+        )
+        .eq("couple_id", coupleId)
+        .order("local_date", { ascending: false })
+        .order("updated_at", { ascending: false }),
+      supabase
+        .from("same_moments")
+        .select("id, created_by, blind, status, window_ends_at, created_at, completed_at")
+        .eq("couple_id", coupleId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("same_moment_submissions")
+        .select(
+          "same_moment_id, author_user_id, caption, image_thumb_path, image_full_path, created_at",
+        )
+        .eq("couple_id", coupleId)
+        .order("created_at", { ascending: true }),
+    ]);
   if (
     couple.error ||
     settings.error ||
@@ -68,7 +86,9 @@ export default async function UniversePage({
     objects.error ||
     capsules.error ||
     contents.error ||
-    checkins.error
+    checkins.error ||
+    moments.error ||
+    submissions.error
   ) {
     throw new Error("Could not load your universe.");
   }
@@ -83,10 +103,27 @@ export default async function UniversePage({
   const cometByCapsule = new Map(
     objects.data.filter((object) => object.capsule_id).map((object) => [object.capsule_id, object]),
   );
+  const twinsByMoment = new Map<string, NonNullable<SameMomentRow["twins"]>>();
+  for (const object of objects.data) {
+    if (!object.same_moment_id || object.twin_slot == null) continue;
+    const list = twinsByMoment.get(object.same_moment_id) ?? [];
+    list.push({
+      positionX: object.position_x,
+      positionY: object.position_y,
+      positionZ: object.position_z,
+      scale: object.scale,
+      rotation: object.rotation,
+      visualSeed: object.visual_seed,
+      slot: object.twin_slot,
+    });
+    twinsByMoment.set(object.same_moment_id, list);
+  }
   const contentByCapsule = new Map(contents.data.map((content) => [content.capsule_id, content]));
   const thumbs = await signedUrlMap(supabase, [
     ...photos.data.map((photo) => photo.thumb_path),
     ...contents.data.flatMap((content) => (content.image_thumb_path ? [content.image_thumb_path] : [])),
+    ...checkins.data.flatMap((row) => (row.image_thumb_path ? [row.image_thumb_path] : [])),
+    ...submissions.data.flatMap((row) => (row.image_thumb_path ? [row.image_thumb_path] : [])),
   ]);
   const photosByMemory = new Map<string, UniverseMemory["photos"]>();
   for (const photo of photos.data) {
@@ -167,25 +204,62 @@ export default async function UniversePage({
     };
   });
 
+  const submissionsByMoment = new Map<string, typeof submissions.data>();
+  for (const submission of submissions.data) {
+    const list = submissionsByMoment.get(submission.same_moment_id) ?? [];
+    list.push(submission);
+    submissionsByMoment.set(submission.same_moment_id, list);
+  }
+
+  const universeMoments: SameMomentRow[] = moments.data.map((moment) => {
+    const rows = submissionsByMoment.get(moment.id) ?? [];
+    return {
+      id: moment.id,
+      status: moment.status as SameMomentRow["status"],
+      blind: moment.blind,
+      createdAt: moment.created_at,
+      windowEndsAt: moment.window_ends_at,
+      completedAt: moment.completed_at,
+      createdByName:
+        nameByUser.get(moment.created_by) ||
+        (moment.created_by === userId ? "You" : "Your partner"),
+      mineSubmitted: rows.some((row) => row.author_user_id === userId),
+      submissions: rows.map((row) => ({
+        authorUserId: row.author_user_id,
+        authorName:
+          nameByUser.get(row.author_user_id) ||
+          (row.author_user_id === userId ? "You" : "Your partner"),
+        isMine: row.author_user_id === userId,
+        caption: row.caption,
+        thumbUrl: row.image_thumb_path ? thumbs.get(row.image_thumb_path) ?? null : null,
+        fullPath: row.image_full_path,
+      })),
+      twins: twinsByMoment.get(moment.id) ?? [],
+    };
+  });
+
   const today = todayInZone(settings.data.timezone);
   const todaysMoods = checkins.data
     .filter((row) => row.local_date === today)
     .map((row) => row.mood);
   const age = computeRelationshipAge(couple.data.relationship_start_date, settings.data.timezone);
   const canInvite = couple.data.created_by === userId && members.data.length < 2;
-  const { star, capsule } = await searchParams;
+  const { star, capsule, moment } = await searchParams;
 
   return (
     <main className="universe-page">
       <AppHeader coupleName={couple.data.name} />
       <UniverseView
         coupleId={coupleId}
+        userId={userId}
         memories={universeMemories}
         capsules={universeCapsules}
+        moments={universeMoments}
         age={age}
         canInvite={canInvite}
         initialSelectedId={star ?? null}
         initialCapsuleId={capsule ?? null}
+        initialMomentId={moment ?? null}
         today={today}
         sky={skyFromMoods(todaysMoods)}
         checkins={checkins.data.map((row) => ({
@@ -198,6 +272,8 @@ export default async function UniversePage({
           mood: row.mood,
           note: row.note,
           isMine: row.author_user_id === userId,
+          thumbUrl: row.image_thumb_path ? thumbs.get(row.image_thumb_path) ?? null : null,
+          fullPath: row.image_full_path,
         }))}
       />
     </main>
