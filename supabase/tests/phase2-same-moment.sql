@@ -101,7 +101,8 @@ select test.assert_true(
 
 reset role;
 update public.same_moments
-set window_ends_at = now() - interval '1 minute'
+set created_at = now() - interval '3 minutes',
+    window_ends_at = now() - interval '1 minute'
 where id = :'open_moment';
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000002', false);
