@@ -6,9 +6,10 @@ import { useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
 import { CheckInPanel, type CheckinRow } from "@/components/check-in-panel";
 import type { RelationshipAge } from "@/features/couple/age";
-import type { SkyWeather } from "@/features/checkin/weather";
+import type { CoupleSky } from "@/features/checkin/weather";
 import { deleteMemory, type DeleteMemoryState } from "@/features/memory/actions";
 import { memoryIcon } from "@/features/memory/icons";
+import { categoryColor, STICKER_INK } from "@/features/memory/palette";
 import { createClient } from "@/lib/supabase/client";
 import { UniverseScene, type SceneStar } from "./universe-scene";
 
@@ -43,7 +44,7 @@ type Props = {
   initialSelectedId: string | null;
   today: string;
   checkins: CheckinRow[];
-  weather: SkyWeather;
+  sky: CoupleSky;
 };
 
 const initialDeleteState: DeleteMemoryState = { ok: false, error: null };
@@ -62,11 +63,13 @@ function HeartIcon() {
   );
 }
 
-function StarGlyph({ id, bright }: { id: string; bright: boolean }) {
+function StarSticker({ id, category, bright }: { id: string; category: string; bright: boolean }) {
   const icon = memoryIcon(id);
+  const rule = icon.evenodd ? "evenodd" : "nonzero";
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={bright ? "star-spark-bright" : "star-spark-dim"}>
-      <path d={icon.d} fill="currentColor" fillRule={icon.evenodd ? "evenodd" : "nonzero"} />
+    <svg viewBox="-2 -2 28 28" aria-hidden="true" className={`star-sticker${bright ? " is-bright" : ""}`}>
+      <path d={icon.d} transform="translate(0.7 1.1)" fill="rgba(20, 10, 36, 0.38)" stroke="rgba(20, 10, 36, 0.38)" strokeWidth="3" strokeLinejoin="round" fillRule={rule} />
+      <path d={icon.d} fill={categoryColor(category)} stroke={STICKER_INK} strokeWidth="2.6" strokeLinejoin="round" strokeLinecap="round" paintOrder="stroke" fillRule={rule} />
     </svg>
   );
 }
@@ -114,13 +117,15 @@ export function UniverseView({
   initialSelectedId,
   today,
   checkins,
-  weather,
+  sky,
 }: Props) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState(initialSelectedId);
   const [seenInitialId, setSeenInitialId] = useState(initialSelectedId);
   const [bornId, setBornId] = useState<string | null>(initialSelectedId);
+  const [cheer, setCheer] = useState<"star" | "checkin" | null>(initialSelectedId ? "star" : null);
   const knownIds = useRef<Set<string> | null>(null);
+  const seenCheckins = useRef<string | null>(null);
 
   // Adjust state during render when a navigation supplies a new ?star= target,
   // so a freshly created or edited memory opens its dialog without an effect.
@@ -133,16 +138,34 @@ export function UniverseView({
     const ids = memories.map((memory) => memory.id);
     if (knownIds.current) {
       const fresh = ids.find((id) => !knownIds.current?.has(id));
-      if (fresh) setBornId(fresh);
+      if (fresh) {
+        setBornId(fresh);
+        setCheer("star");
+      }
     }
     knownIds.current = new Set(ids);
   }, [memories]);
 
   useEffect(() => {
     if (!bornId) return;
-    const timer = window.setTimeout(() => setBornId(null), 1400);
+    const timer = window.setTimeout(() => setBornId(null), 1500);
     return () => window.clearTimeout(timer);
   }, [bornId]);
+
+  useEffect(() => {
+    const signature = checkins
+      .filter((row) => row.localDate === today)
+      .map((row) => `${row.authorUserId}:${row.mood}:${row.note ?? ""}`)
+      .join("|");
+    if (seenCheckins.current !== null && seenCheckins.current !== signature) setCheer("checkin");
+    seenCheckins.current = signature;
+  }, [checkins, today]);
+
+  useEffect(() => {
+    if (!cheer) return;
+    const timer = window.setTimeout(() => setCheer(null), 1600);
+    return () => window.clearTimeout(timer);
+  }, [cheer]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -194,39 +217,49 @@ export function UniverseView({
   return (
     <div className="universe-shell">
       <h1 className="sr-only">Your universe</h1>
-      <div className="universe-toolbar">
-        <p className={`universe-age-chip${isAnniversary ? " is-anniversary" : ""}`}>
-          <HeartIcon />
-          {ageLine(age)}
-        </p>
-        <Link className="primary-button universe-add" href="/memory/new">Add a memory</Link>
-      </div>
-      <CheckInPanel today={today} checkins={checkins} />
-      <UniverseScene
-        stars={sceneStars}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-        weather={weather}
-        bornId={bornId}
-      />
-      {memories.length === 0 ? (
-        <section className="universe-empty-overlay" aria-labelledby="universe-title">
-          <div className="universe-empty-card">
-            <TwinStarIcon />
-            <h2 id="universe-title">Your universe begins here.</h2>
-            {canInvite ? (
-              <Link className="primary-button universe-action" href="/couple/invite">Invite your partner</Link>
-            ) : (
-              <p className="universe-note">A quiet place for the moments you will share.</p>
-            )}
+      <div className="universe-layout">
+        <div className="universe-stage">
+          <UniverseScene
+            stars={sceneStars}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            sky={sky}
+            bornId={bornId}
+            cheer={cheer}
+          />
+          <div className="universe-toolbar">
+            <p className={`universe-age-chip${isAnniversary ? " is-anniversary" : ""}`}>
+              <HeartIcon />
+              {ageLine(age)}
+            </p>
+            <Link className="primary-button universe-add" href="/memory/new">
+              <span aria-hidden="true">✦</span> Add a memory
+            </Link>
           </div>
-        </section>
-      ) : (
+          {memories.length === 0 && (
+            <section className="universe-empty-overlay" aria-labelledby="universe-title">
+              <div className="universe-empty-card">
+                <TwinStarIcon />
+                <h2 id="universe-title">Your universe begins here.</h2>
+                {canInvite ? (
+                  <Link className="primary-button universe-action" href="/couple/invite">Invite your partner</Link>
+                ) : (
+                  <p className="universe-note">A quiet place for the moments you will share.</p>
+                )}
+              </div>
+            </section>
+          )}
+        </div>
+        <CheckInPanel today={today} checkins={checkins} />
+      </div>
+      {memories.length > 0 && (
         <section className="universe-list" aria-labelledby="universe-stars-heading">
-          <h2 id="universe-stars-heading">Our stars</h2>
-          <p className="universe-count">
-            {memories.length === 1 ? "1 memory" : `${memories.length} memories`} shining in your universe.
-          </p>
+          <div className="universe-list-head">
+            <h2 id="universe-stars-heading">Our stars</h2>
+            <p className="universe-count">
+              {memories.length === 1 ? "1 memory" : `${memories.length} memories`} shining in your universe
+            </p>
+          </div>
           <ul className="star-list">
             {memories.map((memory) => (
               <li key={memory.id}>
@@ -236,12 +269,16 @@ export function UniverseView({
                   aria-current={memory.id === selectedId ? "true" : undefined}
                   onClick={() => setSelectedId(memory.id)}
                 >
-                  <span className="star-option-title">
-                    <StarGlyph id={memory.icon} bright={memory.star?.type === "BRIGHT_STAR"} />
-                    {memory.title}
-                  </span>
-                  <span className="star-option-meta">
-                    {formatDate(memory.memoryDate)} · {memory.category}
+                  <StarSticker
+                    id={memory.icon}
+                    category={memory.category}
+                    bright={memory.star?.type === "BRIGHT_STAR"}
+                  />
+                  <span className="star-option-text">
+                    <span className="star-option-title">{memory.title}</span>
+                    <span className="star-option-meta">
+                      {formatDate(memory.memoryDate)} · {categoryLabel(memory.category)}
+                    </span>
                   </span>
                 </button>
               </li>
@@ -279,6 +316,7 @@ function MemoryDialog({ memory, onClose }: { memory: UniverseMemory; onClose: ()
     >
       <article className="memory-dialog-body">
         <div className="memory-dialog-head">
+          <StarSticker id={memory.icon} category={memory.category} bright={memory.star?.type === "BRIGHT_STAR"} />
           <h2 id="memory-dialog-title">{memory.title}</h2>
           <button type="button" className="text-button" onClick={() => dialogRef.current?.close()}>
             Close

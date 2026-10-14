@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
 import { UniverseView, type UniverseMemory } from "@/components/universe-view";
 import { todayInZone, computeRelationshipAge } from "@/features/couple/age";
-import { weatherFromMood } from "@/features/checkin/weather";
+import { skyFromMoods } from "@/features/checkin/weather";
 import { currentCoupleId, requireUser } from "@/lib/auth";
 
 export default async function UniversePage({
@@ -95,7 +95,7 @@ export default async function UniversePage({
   const today = todayInZone(settings.data.timezone);
   const todaysMoods = checkins.data
     .filter((row) => row.local_date === today)
-    .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+    .map((row) => row.mood);
   const age = computeRelationshipAge(couple.data.relationship_start_date, settings.data.timezone);
   const canInvite = couple.data.created_by === userId && members.data.length < 2;
   const { star } = await searchParams;
@@ -110,7 +110,7 @@ export default async function UniversePage({
         canInvite={canInvite}
         initialSelectedId={star ?? null}
         today={today}
-        weather={weatherFromMood(todaysMoods[0]?.mood ?? null)}
+        sky={skyFromMoods(todaysMoods)}
         checkins={checkins.data.map((row) => ({
           id: row.id,
           authorUserId: row.author_user_id,

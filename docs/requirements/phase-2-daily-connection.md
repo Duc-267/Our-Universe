@@ -8,8 +8,8 @@ Let both partners share one mood for the local day, see each other's check-in, a
 
 - [x] Each member can save at most one check-in per local day in the couple timezone, with a mood and an optional note of at most 280 characters. Saving again the same day updates that check-in.
 - [x] The partner can read today's check-in and earlier check-ins. A user outside the couple cannot read or write them, including by calling the data API directly.
-- [x] The universe atmosphere follows the most recently updated check-in from today. With no check-in today, the sky stays as it was. The sky does not score or label the relationship.
-- [x] A newly appeared memory star plays a short birth animation that does not block the scene. `prefers-reduced-motion` skips that animation.
+- [x] The sky and the central duck follow both of today's check-ins. Matching moods share one pose; different moods alternate and tint the sky together. With no check-in today, the duck stays quietly curious. Nothing scores or labels the relationship.
+- [x] A newly appeared memory star makes the duck hop and toss a spark. A new or updated check-in makes the duck spin once with a heart. Neither animation blocks the scene. `prefers-reduced-motion` leaves the duck in a still pose.
 - [x] While a partner is on `/universe`, a new memory or check-in from the other partner updates the page without a manual reload. If realtime is unavailable, a reload still shows the saved data.
 - [x] Schema, RLS, and the check-in function are versioned in a migration. Local database checks cover the one-per-day rule, an update the same day, a rejected mood, and cross-couple privacy.
 - [x] `docs/architecture.md` records the check-in day boundary, the weather rule, and the realtime fallback.

@@ -43,6 +43,51 @@ export function memoryIcon(id: string) {
   return ICONS_BY_ID.get(id) ?? ICONS_BY_ID.get("spark")!;
 }
 
+/** The memory's own icon drawn as an outlined sticker with a soft drop shadow and a gloss. */
+export function paintIconSticker(
+  ctx: CanvasRenderingContext2D,
+  id: string,
+  x: number,
+  y: number,
+  size: number,
+  fill: string,
+  ink: string,
+) {
+  const icon = memoryIcon(id);
+  const path = new Path2D(icon.d);
+  const rule: CanvasFillRule = icon.evenodd ? "evenodd" : "nonzero";
+  ctx.save();
+  ctx.translate(x - size / 2, y - size / 2);
+  ctx.scale(size / 24, size / 24);
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  ctx.save();
+  ctx.translate(0.7, 1.1);
+  ctx.strokeStyle = "rgba(20, 10, 36, 0.38)";
+  ctx.fillStyle = "rgba(20, 10, 36, 0.38)";
+  ctx.lineWidth = 3;
+  ctx.stroke(path);
+  ctx.fill(path, rule);
+  ctx.restore();
+
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = 2.6;
+  ctx.stroke(path);
+  ctx.fillStyle = fill;
+  ctx.fill(path, rule);
+
+  ctx.save();
+  ctx.clip(path, rule);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+  ctx.beginPath();
+  ctx.ellipse(8, 6.5, 4.2, 2.4, -0.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.restore();
+}
+
 export function paintMemoryIcon(
   ctx: CanvasRenderingContext2D,
   id: string,

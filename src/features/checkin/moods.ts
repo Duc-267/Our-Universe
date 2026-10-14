@@ -22,6 +22,21 @@ const LABELS: Record<CheckinMood, string> = {
   miss_you: "Miss you",
 };
 
+const EMOJI: Record<CheckinMood, string> = {
+  happy: "😊",
+  calm: "😌",
+  tired: "😴",
+  stressed: "😣",
+  sad: "🥲",
+  excited: "🤩",
+  need_space: "🫧",
+  miss_you: "🥺",
+};
+
+export function moodEmoji(mood: string): string {
+  return isCheckinMood(mood) ? EMOJI[mood] : "✨";
+}
+
 export function isCheckinMood(value: string): value is CheckinMood {
   return (CHECKIN_MOODS as readonly string[]).includes(value);
 }
