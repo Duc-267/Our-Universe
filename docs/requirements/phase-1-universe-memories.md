@@ -35,6 +35,5 @@ Let both members of a private couple create, explore, and maintain memory stars 
 
 ## Out of scope
 
-- Photo upload and delivery (Epic 1.5), including Cloudflare R2 setup and image transforms.
-- Secret Capsules and their cosmic objects (Epics 1.6–1.7).
+- Photo upload and Secret Capsules are delivered by `docs/requirements/phase-1-photos-capsules.md`.
 - Realtime, star-birth animation, Same Moment, quests, trips, constellations, AI summaries, and public sharing.

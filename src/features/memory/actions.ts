@@ -6,7 +6,7 @@ import { currentCoupleId, requireUser } from "@/lib/auth";
 import { MEMORY_CATEGORIES } from "./categories";
 import { isMemoryIcon } from "./icons";
 
-export type MemoryFormState = { error: string | null };
+export type MemoryFormState = { error: string | null; memoryId: string | null };
 export type DeleteMemoryState = { ok: boolean; error: string | null };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -79,7 +79,7 @@ export async function createMemory(
 ): Promise<MemoryFormState> {
   const parsed = parseMemory(formData);
   if (parsed.error || !parsed.values) {
-    return { error: parsed.error ?? "Could not save this memory." };
+    return { error: parsed.error ?? "Could not save this memory.", memoryId: null };
   }
   const { supabase, userId } = await requireUser();
   const coupleId = await currentCoupleId(supabase, userId);
@@ -97,11 +97,11 @@ export async function createMemory(
   });
   if (error || typeof data !== "string") {
     console.error("create_memory failed:", error?.message ?? "unexpected rpc result");
-    return { error: "Could not save this memory. Please try again." };
+    return { error: "Could not save this memory. Please try again.", memoryId: null };
   }
 
   revalidatePath("/universe");
-  redirect(`/universe?star=${data}`);
+  return { error: null, memoryId: data };
 }
 
 export async function updateMemory(
@@ -110,11 +110,11 @@ export async function updateMemory(
 ): Promise<MemoryFormState> {
   const memoryId = field(formData, "memory_id");
   if (!UUID_PATTERN.test(memoryId)) {
-    return { error: "This memory could not be found." };
+    return { error: "This memory could not be found.", memoryId: null };
   }
   const parsed = parseMemory(formData);
   if (parsed.error || !parsed.values) {
-    return { error: parsed.error ?? "Could not save this memory." };
+    return { error: parsed.error ?? "Could not save this memory.", memoryId: null };
   }
   const { supabase, userId } = await requireUser();
   const coupleId = await currentCoupleId(supabase, userId);
@@ -132,11 +132,11 @@ export async function updateMemory(
   });
   if (error) {
     console.error("update_memory failed:", error.message);
-    return { error: "Could not save these changes. Please try again." };
+    return { error: "Could not save these changes. Please try again.", memoryId: null };
   }
 
   revalidatePath("/universe");
-  redirect(`/universe?star=${memoryId}`);
+  return { error: null, memoryId };
 }
 
 export async function deleteMemory(
@@ -151,12 +151,35 @@ export async function deleteMemory(
   const coupleId = await currentCoupleId(supabase, userId);
   if (!coupleId) redirect("/couple/new");
 
+  const { data: photos } = await supabase
+    .from("memory_photos")
+    .select("full_path, thumb_path")
+    .eq("memory_id", memoryId);
   const { error } = await supabase.rpc("delete_memory", { p_memory_id: memoryId });
   if (error) {
     console.error("delete_memory failed:", error.message);
     return { ok: false, error: "Could not delete this memory. Please try again." };
   }
+  const paths = (photos ?? []).flatMap((photo) => [photo.full_path, photo.thumb_path]);
+  if (paths.length > 0) await supabase.storage.from("universe-media").remove(paths);
 
   revalidatePath("/universe");
   return { ok: true, error: null };
+}
+
+export async function deleteMemoryPhoto(photoId: string): Promise<{ error: string | null }> {
+  if (!UUID_PATTERN.test(photoId)) return { error: "This photo could not be found." };
+  const { supabase, userId } = await requireUser();
+  const coupleId = await currentCoupleId(supabase, userId);
+  if (!coupleId) redirect("/couple/new");
+  const { data, error } = await supabase.rpc("delete_memory_photo", { p_photo_id: photoId });
+  if (error) {
+    console.error("delete_memory_photo failed:", error.message);
+    return { error: "Could not remove this photo." };
+  }
+  if (Array.isArray(data) && data.length > 0) {
+    await supabase.storage.from("universe-media").remove(data.filter((path) => typeof path === "string"));
+  }
+  revalidatePath("/universe");
+  return { error: null };
 }

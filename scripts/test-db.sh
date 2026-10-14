@@ -6,9 +6,11 @@ psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261008000100_phase0_foundation.
 psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011145341_phase1_universe_memories.sql
 psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261013231000_memory_icons.sql
 psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261013233000_phase2_checkins.sql
+psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261014140000_phase1_photos_capsules.sql
 psql -v ON_ERROR_STOP=1 -f supabase/tests/phase0.sql
 psql -v ON_ERROR_STOP=1 -f supabase/tests/phase1.sql
 psql -v ON_ERROR_STOP=1 -f supabase/tests/phase2.sql
+psql -v ON_ERROR_STOP=1 -f supabase/tests/phase1-media.sql
 
 mapfile -t tokens < <(psql -At -v ON_ERROR_STOP=1 -c 'select token from test.race_tokens order by n')
 test "${#tokens[@]}" -eq 2

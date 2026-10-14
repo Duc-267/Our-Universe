@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
 import { MemoryForm } from "@/components/memory-form";
+import { signedUrlMap } from "@/features/media/urls";
 import { currentCoupleId, requireUser } from "@/lib/auth";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -18,7 +19,7 @@ export default async function EditMemoryPage({
   const coupleId = await currentCoupleId(supabase, userId);
   if (!coupleId) redirect("/couple/new");
 
-  const [couple, memory] = await Promise.all([
+  const [couple, memory, photos] = await Promise.all([
     supabase.from("couples").select("name").eq("id", coupleId).single(),
     supabase
       .from("memories")
@@ -27,10 +28,16 @@ export default async function EditMemoryPage({
       )
       .eq("id", id)
       .maybeSingle(),
+    supabase
+      .from("memory_photos")
+      .select("id, thumb_path")
+      .eq("memory_id", id)
+      .order("created_at", { ascending: true }),
   ]);
-  if (couple.error) throw new Error("Could not load couple.");
+  if (couple.error || photos.error) throw new Error("Could not load couple.");
   if (!memory.data) notFound();
   if (memory.data.author_user_id !== userId) redirect("/universe");
+  const thumbs = await signedUrlMap(supabase, photos.data.map((photo) => photo.thumb_path));
 
   return (
     <main className="interior-page">
@@ -43,6 +50,11 @@ export default async function EditMemoryPage({
         </p>
         <MemoryForm
           mode="edit"
+          coupleId={coupleId}
+          existingPhotos={photos.data.flatMap((photo) => {
+            const thumbUrl = thumbs.get(photo.thumb_path);
+            return thumbUrl ? [{ id: photo.id, thumbUrl }] : [];
+          })}
           memory={{
             id: memory.data.id,
             title: memory.data.title,
