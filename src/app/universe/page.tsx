@@ -1,24 +1,47 @@
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
 import { UniverseView, type UniverseCapsule, type UniverseMemory } from "@/components/universe-view";
+import type { UniverseMilestone } from "@/components/milestones-panel";
 import type { SameMomentRow } from "@/components/same-moment-panel";
 import { todayInZone, computeRelationshipAge } from "@/features/couple/age";
 import { skyFromMoods } from "@/features/checkin/weather";
 import { signedUrlMap } from "@/features/media/urls";
 import { currentCoupleId, requireUser } from "@/lib/auth";
 
+function ordinal(value: string): string {
+  const number = Number(value);
+  const mod100 = number % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${number}th`;
+  switch (number % 10) {
+    case 1:
+      return `${number}st`;
+    case 2:
+      return `${number}nd`;
+    case 3:
+      return `${number}rd`;
+    default:
+      return `${number}th`;
+  }
+}
+
+function milestoneTitle(kind: string, key: string): string {
+  if (kind === "anniversary") return `${ordinal(key)} anniversary`;
+  return `${key} days together`;
+}
+
 export default async function UniversePage({
   searchParams,
 }: {
-  searchParams: Promise<{ star?: string; capsule?: string; moment?: string }>;
+  searchParams: Promise<{ star?: string; capsule?: string; moment?: string; moon?: string }>;
 }) {
   const { supabase, userId } = await requireUser();
   const coupleId = await currentCoupleId(supabase, userId);
   if (!coupleId) redirect("/couple/new");
 
   await supabase.rpc("refresh_same_moments");
+  await supabase.rpc("refresh_milestones");
 
-  const [couple, settings, members, memories, photos, objects, capsules, contents, checkins, moments, submissions] =
+  const [couple, settings, members, memories, photos, objects, capsules, contents, checkins, moments, submissions, milestones] =
     await Promise.all([
       supabase
         .from("couples")
@@ -43,10 +66,10 @@ export default async function UniversePage({
       supabase
         .from("cosmic_objects")
         .select(
-          "memory_id, capsule_id, same_moment_id, twin_slot, object_type, position_x, position_y, position_z, scale, brightness, rotation, visual_seed",
+          "memory_id, capsule_id, same_moment_id, milestone_id, twin_slot, object_type, position_x, position_y, position_z, scale, brightness, rotation, visual_seed",
         )
         .eq("couple_id", coupleId)
-        .in("object_type", ["STAR", "BRIGHT_STAR", "COMET", "TWIN_STAR"]),
+        .in("object_type", ["STAR", "BRIGHT_STAR", "COMET", "TWIN_STAR", "MOON"]),
       supabase
         .from("capsules")
         .select("id, creator_user_id, unlock_date, unlock_at, opened_at, created_at")
@@ -76,6 +99,12 @@ export default async function UniversePage({
         )
         .eq("couple_id", coupleId)
         .order("created_at", { ascending: true }),
+      supabase
+        .from("milestones")
+        .select("id, kind, key, reached_on")
+        .eq("couple_id", coupleId)
+        .order("reached_on", { ascending: false })
+        .order("created_at", { ascending: false }),
     ]);
   if (
     couple.error ||
@@ -88,7 +117,8 @@ export default async function UniversePage({
     contents.error ||
     checkins.error ||
     moments.error ||
-    submissions.error
+    submissions.error ||
+    milestones.error
   ) {
     throw new Error("Could not load your universe.");
   }
@@ -118,6 +148,21 @@ export default async function UniversePage({
     });
     twinsByMoment.set(object.same_moment_id, list);
   }
+  const moonByMilestone = new Map(
+    objects.data
+      .filter((object) => object.object_type === "MOON" && object.milestone_id)
+      .map((object) => [
+        object.milestone_id as string,
+        {
+          positionX: object.position_x,
+          positionY: object.position_y,
+          positionZ: object.position_z,
+          scale: object.scale,
+          rotation: object.rotation,
+          visualSeed: object.visual_seed,
+        },
+      ]),
+  );
   const contentByCapsule = new Map(contents.data.map((content) => [content.capsule_id, content]));
   const thumbs = await signedUrlMap(supabase, [
     ...photos.data.map((photo) => photo.thumb_path),
@@ -238,13 +283,22 @@ export default async function UniversePage({
     };
   });
 
+  const universeMilestones: UniverseMilestone[] = milestones.data.map((row) => ({
+    id: row.id,
+    kind: row.kind as UniverseMilestone["kind"],
+    key: row.key,
+    reachedOn: row.reached_on,
+    title: milestoneTitle(row.kind, row.key),
+    moon: moonByMilestone.get(row.id) ?? null,
+  }));
+
   const today = todayInZone(settings.data.timezone);
   const todaysMoods = checkins.data
     .filter((row) => row.local_date === today)
     .map((row) => row.mood);
   const age = computeRelationshipAge(couple.data.relationship_start_date, settings.data.timezone);
   const canInvite = couple.data.created_by === userId && members.data.length < 2;
-  const { star, capsule, moment } = await searchParams;
+  const { star, capsule, moment, moon } = await searchParams;
 
   return (
     <main className="universe-page">
@@ -255,11 +309,13 @@ export default async function UniversePage({
         memories={universeMemories}
         capsules={universeCapsules}
         moments={universeMoments}
+        milestones={universeMilestones}
         age={age}
         canInvite={canInvite}
         initialSelectedId={star ?? null}
         initialCapsuleId={capsule ?? null}
         initialMomentId={moment ?? null}
+        initialMoonId={moon ?? null}
         today={today}
         sky={skyFromMoods(todaysMoods)}
         checkins={checkins.data.map((row) => ({
