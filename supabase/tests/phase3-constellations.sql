@@ -22,28 +22,26 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001
 
 select public.create_memory(
   :'couple_a', 'Midnight snack run', '2025-06-01', null, null, 'everyday', 4::smallint
-) as memory_extra \gset
-
-select array_agg(id order by created_at) as memory_ids
-from (
-  select id, created_at from public.memories
-  where couple_id = :'couple_a'
-  order by created_at
-  limit 3
-) m \gset
+) as memory_a \gset
+select public.create_memory(
+  :'couple_a', 'Late call one', '2025-06-02', null, null, 'everyday', 5::smallint
+) as memory_b \gset
+select public.create_memory(
+  :'couple_a', 'Late call two', '2025-06-03', null, null, 'everyday', 5::smallint
+) as memory_c \gset
 
 select test.reject_sql(
   format(
     'select public.create_constellation(%L, null, array[%L]::uuid[])',
     'Too few',
-    :'memory_extra'
+    :'memory_a'
   )
 );
 
 select public.create_constellation(
   'Late Night Calls',
   'Whispers after midnight',
-  :'memory_ids'::uuid[]
+  array[:'memory_a', :'memory_b', :'memory_c']::uuid[]
 ) as constellation_id \gset
 
 select test.assert_true(
@@ -61,15 +59,7 @@ select public.update_constellation(
   :'constellation_id',
   'Night Calls',
   null,
-  (
-    select array_agg(memory_id order by memory_id)
-    from (
-      select memory_id from public.constellation_members
-      where constellation_id = :'constellation_id'
-      order by memory_id
-      limit 2
-    ) s
-  )
+  array[:'memory_a', :'memory_b']::uuid[]
 );
 
 select test.assert_true(
@@ -84,7 +74,7 @@ select test.reject_sql(
     'select public.update_constellation(%L::uuid, %L, null, array[%L]::uuid[])',
     :'constellation_id',
     'Solo',
-    (select memory_id from public.constellation_members where constellation_id = :'constellation_id' limit 1)
+    :'memory_a'
   )
 );
 
