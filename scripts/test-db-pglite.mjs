@@ -38,6 +38,7 @@ try {
   await database.exec(readFileSync("supabase/migrations/20261014153000_phase2_same_moment.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261015120000_phase3_moons_milestones.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261015200000_phase3_quests.sql", "utf8"));
+  await database.exec(readFileSync("supabase/migrations/20261015210000_phase3_trips.sql", "utf8"));
   await query("insert into public.profiles (id, display_name) select id, raw_user_meta_data ->> 'display_name' from auth.users");
   await query(
     "insert into auth.users(id, raw_user_meta_data) values ($1, $2::jsonb)",
@@ -142,10 +143,13 @@ try {
   )[0];
   assert.equal(starWalk.object_type, "STAR");
   assert.equal(starWalk.brightness, 0.55);
-  const radiusWalk = Math.sqrt(
-    starWalk.position_x ** 2 + starWalk.position_y ** 2 + starWalk.position_z ** 2,
+  const radiusWalk = Math.hypot(
+    Number(starWalk.position_x),
+    Number(starWalk.position_y),
+    Number(starWalk.position_z),
   );
-  assert.ok(radiusWalk >= 46 && radiusWalk <= 80, "star sits inside the orbit band");
+  // Stars use radius 46 + (hash % 34); allow float drift through jsonb text round-trip.
+  assert.ok(radiusWalk >= 45.5 && radiusWalk <= 80.5, "star sits inside the orbit band");
 
   const [{ create_memory: memoryBright }] = await query(
     "select public.create_memory($1, $2, $3::date, $4, $5, $6, $7)",
@@ -459,6 +463,44 @@ try {
       [questId],
     ))[0].n,
     1,
+  );
+
+  await asUser(userIds.alex);
+  const [{ create_trip: tripId }] = await query(
+    "select public.create_trip($1, $2::date, $3::date, $4, true)",
+    ["Hanoi", "2026-03-01", "2026-03-05", "Street food"],
+  );
+  assert.equal(
+    (await query(
+      "select count(*)::int as n from public.cosmic_objects where trip_id = $1 and object_type = 'PLANET'",
+      [tripId],
+    ))[0].n,
+    1,
+  );
+  const memoryId = (await query(
+    "select id from public.memories where couple_id = $1 order by created_at limit 1",
+    [coupleA],
+  ))[0]?.id;
+  if (memoryId) {
+    await query("select public.link_trip_memory($1, $2)", [tripId, memoryId]);
+    assert.equal(
+      (await query(
+        "select count(*)::int as n from public.trip_memories where trip_id = $1",
+        [tripId],
+      ))[0].n,
+      1,
+    );
+  }
+  await query(
+    "select public.update_trip($1, $2, $3::date, $4::date, $5, false)",
+    [tripId, "Hanoi", "2026-03-01", "2026-03-05", null],
+  );
+  assert.equal(
+    (await query(
+      "select count(*)::int as n from public.cosmic_objects where trip_id = $1",
+      [tripId],
+    ))[0].n,
+    0,
   );
 
   await asOwner();

@@ -49,4 +49,6 @@ supabase db push
 
 `supabase/migrations/20261015200000_phase3_quests.sql` adds couple quests, submissions, and quest rewards. Apply it with `supabase db push` before starting quests.
 
+`supabase/migrations/20261015210000_phase3_trips.sql` adds trips, memory links, and significant-trip planets. Apply it with `supabase db push` before creating trips.
+
 Verified on 2026-10-12: after applying the migration, the Data API already serves all three tables — `GET /rest/v1/<table>` with the publishable key returns the 42501 privilege error for the anon role (table found, denied by design), not the PGRST205 "Could not find the table" error that missing or unexposed tables return. No dashboard exposure step is required; `/universe` reads these tables with the authenticated role.

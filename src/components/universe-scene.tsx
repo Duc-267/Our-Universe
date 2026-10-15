@@ -68,7 +68,18 @@ export type SceneReward = {
   visualSeed: number;
 };
 
-type SceneTarget = { kind: "star" | "capsule" | "moment" | "moon" | "quest"; id: string };
+export type ScenePlanet = {
+  tripId: string;
+  title: string;
+  positionX: number;
+  positionY: number;
+  positionZ: number;
+  scale: number;
+  rotation: number;
+  visualSeed: number;
+};
+
+type SceneTarget = { kind: "star" | "capsule" | "moment" | "moon" | "quest" | "trip"; id: string };
 
 type Props = {
   stars: SceneStar[];
@@ -76,6 +87,7 @@ type Props = {
   twins: SceneTwin[];
   moons: SceneMoon[];
   rewards: SceneReward[];
+  planets: ScenePlanet[];
   selectedId: string | null;
   onSelect: (target: SceneTarget | null) => void;
   sky: CoupleSky;
@@ -196,7 +208,7 @@ function makeMoon(): HTMLCanvasElement {
   return moon;
 }
 
-export function UniverseScene({ stars, capsules, twins, moons, rewards, selectedId, onSelect, sky, bornId, cheer }: Props) {
+export function UniverseScene({ stars, capsules, twins, moons, rewards, planets, selectedId, onSelect, sky, bornId, cheer }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frontRef = useRef<HTMLCanvasElement>(null);
   const starsRef = useRef(stars);
@@ -204,6 +216,7 @@ export function UniverseScene({ stars, capsules, twins, moons, rewards, selected
   const twinsRef = useRef(twins);
   const moonsRef = useRef(moons);
   const rewardsRef = useRef(rewards);
+  const planetsRef = useRef(planets);
   const selectedRef = useRef(selectedId);
   const selectRef = useRef(onSelect);
   const skyRef = useRef(sky);
@@ -220,6 +233,7 @@ export function UniverseScene({ stars, capsules, twins, moons, rewards, selected
     twinsRef.current = twins;
     moonsRef.current = moons;
     rewardsRef.current = rewards;
+    planetsRef.current = planets;
     selectedRef.current = selectedId;
     selectRef.current = onSelect;
     skyRef.current = sky;
@@ -348,6 +362,13 @@ export function UniverseScene({ stars, capsules, twins, moons, rewards, selected
       return { reward, x: point.x, y: point.y, depth: point.depth, r: base };
     };
 
+    const projectPlanet = (planet: ScenePlanet) => {
+      const point = projectPoint(planet.positionX, planet.positionY, planet.positionZ, 1, 0);
+      if (!point) return null;
+      const base = Math.max(22, planet.scale * 6.2 * (focal() / point.depth));
+      return { planet, x: point.x, y: point.y, depth: point.depth, r: base };
+    };
+
     const hitTest = (px: number, py: number): SceneTarget | null => {
       let best: SceneTarget | null = null;
       let bestDistance = Number.POSITIVE_INFINITY;
@@ -377,6 +398,10 @@ export function UniverseScene({ stars, capsules, twins, moons, rewards, selected
       for (const reward of rewardsRef.current) {
         const projected = projectReward(reward);
         if (projected) consider(reward.questId, "quest", projected.x, projected.y, projected.r);
+      }
+      for (const planet of planetsRef.current) {
+        const projected = projectPlanet(planet);
+        if (projected) consider(planet.tripId, "trip", projected.x, projected.y, projected.r);
       }
       return best;
     };
@@ -814,6 +839,53 @@ export function UniverseScene({ stars, capsules, twins, moons, rewards, selected
       }
     };
 
+    const drawPlanet = (entry: NonNullable<ReturnType<typeof projectPlanet>>, time: number) => {
+      const { planet, x, y, r } = entry;
+      const reduced = reducedMotion.matches;
+      const spin = reduced ? planet.rotation : planet.rotation + time / 12000;
+      ctx.save();
+      ctx.globalAlpha = clamp(1.2 - entry.depth / (cam.dist + 130), 0.65, 1);
+      const aura = ctx.createRadialGradient(x, y, r * 0.2, x, y, r * 1.45);
+      aura.addColorStop(0, "rgba(143, 211, 255, 0.35)");
+      aura.addColorStop(1, "rgba(143, 211, 255, 0)");
+      ctx.fillStyle = aura;
+      ctx.beginPath();
+      ctx.arc(x, y, r * 1.45, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.translate(x, y);
+      ctx.rotate(spin);
+      const body = ctx.createLinearGradient(-r, -r, r, r);
+      body.addColorStop(0, "#7ec8ff");
+      body.addColorStop(0.45, "#4f8fd6");
+      body.addColorStop(1, "#2b5f9e");
+      ctx.fillStyle = body;
+      ctx.strokeStyle = STICKER_INK;
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(255, 246, 230, 0.55)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 1.05, r * 0.28, 0.35, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      if (planet.tripId === selectedRef.current) {
+        ctx.save();
+        ctx.strokeStyle = CREAM;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.arc(x, y, r * 1.5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      if (planet.tripId === hoverId || planet.tripId === selectedRef.current) {
+        labels.push({ x, y: y - r * 1.55, text: planet.title });
+      }
+    };
+
     const drawTwinLinks = (projectedTwins: NonNullable<ReturnType<typeof projectTwin>>[]) => {
       const byMoment = new Map<string, NonNullable<ReturnType<typeof projectTwin>>[]>();
       for (const entry of projectedTwins) {
@@ -890,6 +962,10 @@ export function UniverseScene({ stars, capsules, twins, moons, rewards, selected
           .map((reward) => projectReward(reward))
           .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
           .map((entry) => ({ depth: entry.depth, paint: () => drawReward(entry, time) })),
+        ...planetsRef.current
+          .map((planet) => projectPlanet(planet))
+          .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+          .map((entry) => ({ depth: entry.depth, paint: () => drawPlanet(entry, time) })),
       ].sort((a, b) => b.depth - a.depth);
       labels.length = 0;
 
