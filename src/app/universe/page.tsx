@@ -2,9 +2,11 @@ import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
 import { UniverseView, type UniverseCapsule, type UniverseMemory } from "@/components/universe-view";
 import type { UniverseMilestone } from "@/components/milestones-panel";
+import type { QuestRow } from "@/components/quest-panel";
 import type { SameMomentRow } from "@/components/same-moment-panel";
 import { todayInZone, computeRelationshipAge } from "@/features/couple/age";
 import { skyFromMoods } from "@/features/checkin/weather";
+import type { QuestResponseType, QuestRewardKind } from "@/features/quest/catalog";
 import { signedUrlMap } from "@/features/media/urls";
 import { currentCoupleId, requireUser } from "@/lib/auth";
 
@@ -32,7 +34,7 @@ function milestoneTitle(kind: string, key: string): string {
 export default async function UniversePage({
   searchParams,
 }: {
-  searchParams: Promise<{ star?: string; capsule?: string; moment?: string; moon?: string }>;
+  searchParams: Promise<{ star?: string; capsule?: string; moment?: string; moon?: string; quest?: string }>;
 }) {
   const { supabase, userId } = await requireUser();
   const coupleId = await currentCoupleId(supabase, userId);
@@ -40,8 +42,9 @@ export default async function UniversePage({
 
   await supabase.rpc("refresh_same_moments");
   await supabase.rpc("refresh_milestones");
+  await supabase.rpc("refresh_quests");
 
-  const [couple, settings, members, memories, photos, objects, capsules, contents, checkins, moments, submissions, milestones] =
+  const [couple, settings, members, memories, photos, objects, capsules, contents, checkins, moments, submissions, milestones, quests, questSubmissions] =
     await Promise.all([
       supabase
         .from("couples")
@@ -66,10 +69,10 @@ export default async function UniversePage({
       supabase
         .from("cosmic_objects")
         .select(
-          "memory_id, capsule_id, same_moment_id, milestone_id, twin_slot, object_type, position_x, position_y, position_z, scale, brightness, rotation, visual_seed",
+          "memory_id, capsule_id, same_moment_id, milestone_id, quest_id, twin_slot, object_type, position_x, position_y, position_z, scale, brightness, rotation, visual_seed",
         )
         .eq("couple_id", coupleId)
-        .in("object_type", ["STAR", "BRIGHT_STAR", "COMET", "TWIN_STAR", "MOON"]),
+        .in("object_type", ["STAR", "BRIGHT_STAR", "COMET", "TWIN_STAR", "MOON", "QUEST_REWARD"]),
       supabase
         .from("capsules")
         .select("id, creator_user_id, unlock_date, unlock_at, opened_at, created_at")
@@ -105,6 +108,20 @@ export default async function UniversePage({
         .eq("couple_id", coupleId)
         .order("reached_on", { ascending: false })
         .order("created_at", { ascending: false }),
+      supabase
+        .from("quests")
+        .select(
+          "id, title, instructions, response_type, reward_kind, status, created_at, expires_at, completed_at, created_by",
+        )
+        .eq("couple_id", coupleId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("quest_submissions")
+        .select(
+          "quest_id, author_user_id, body, image_thumb_path, image_full_path, created_at",
+        )
+        .eq("couple_id", coupleId)
+        .order("created_at", { ascending: true }),
     ]);
   if (
     couple.error ||
@@ -118,7 +135,9 @@ export default async function UniversePage({
     checkins.error ||
     moments.error ||
     submissions.error ||
-    milestones.error
+    milestones.error ||
+    quests.error ||
+    questSubmissions.error
   ) {
     throw new Error("Could not load your universe.");
   }
@@ -164,11 +183,28 @@ export default async function UniversePage({
       ]),
   );
   const contentByCapsule = new Map(contents.data.map((content) => [content.capsule_id, content]));
+  const rewardByQuest = new Map(
+    objects.data
+      .filter((object) => object.object_type === "QUEST_REWARD" && object.quest_id)
+      .map((object) => [
+        object.quest_id as string,
+        {
+          positionX: object.position_x,
+          positionY: object.position_y,
+          positionZ: object.position_z,
+          scale: object.scale,
+          rotation: object.rotation,
+          visualSeed: object.visual_seed,
+        },
+      ]),
+  );
+
   const thumbs = await signedUrlMap(supabase, [
     ...photos.data.map((photo) => photo.thumb_path),
     ...contents.data.flatMap((content) => (content.image_thumb_path ? [content.image_thumb_path] : [])),
     ...checkins.data.flatMap((row) => (row.image_thumb_path ? [row.image_thumb_path] : [])),
     ...submissions.data.flatMap((row) => (row.image_thumb_path ? [row.image_thumb_path] : [])),
+    ...questSubmissions.data.flatMap((row) => (row.image_thumb_path ? [row.image_thumb_path] : [])),
   ]);
   const photosByMemory = new Map<string, UniverseMemory["photos"]>();
   for (const photo of photos.data) {
@@ -292,13 +328,50 @@ export default async function UniversePage({
     moon: moonByMilestone.get(row.id) ?? null,
   }));
 
+  const submissionsByQuest = new Map<string, typeof questSubmissions.data>();
+  for (const submission of questSubmissions.data) {
+    const list = submissionsByQuest.get(submission.quest_id) ?? [];
+    list.push(submission);
+    submissionsByQuest.set(submission.quest_id, list);
+  }
+
+  const universeQuests: QuestRow[] = quests.data.map((quest) => {
+    const rows = submissionsByQuest.get(quest.id) ?? [];
+    return {
+      id: quest.id,
+      title: quest.title,
+      instructions: quest.instructions,
+      responseType: quest.response_type as QuestResponseType,
+      rewardKind: quest.reward_kind as QuestRewardKind,
+      status: quest.status as QuestRow["status"],
+      createdAt: quest.created_at,
+      expiresAt: quest.expires_at,
+      completedAt: quest.completed_at,
+      createdByName:
+        nameByUser.get(quest.created_by) ||
+        (quest.created_by === userId ? "You" : "Your partner"),
+      mineSubmitted: rows.some((row) => row.author_user_id === userId),
+      submissions: rows.map((row) => ({
+        authorUserId: row.author_user_id,
+        authorName:
+          nameByUser.get(row.author_user_id) ||
+          (row.author_user_id === userId ? "You" : "Your partner"),
+        isMine: row.author_user_id === userId,
+        body: row.body,
+        thumbUrl: row.image_thumb_path ? thumbs.get(row.image_thumb_path) ?? null : null,
+        fullPath: row.image_full_path,
+      })),
+      reward: rewardByQuest.get(quest.id) ?? null,
+    };
+  });
+
   const today = todayInZone(settings.data.timezone);
   const todaysMoods = checkins.data
     .filter((row) => row.local_date === today)
     .map((row) => row.mood);
   const age = computeRelationshipAge(couple.data.relationship_start_date, settings.data.timezone);
   const canInvite = couple.data.created_by === userId && members.data.length < 2;
-  const { star, capsule, moment, moon } = await searchParams;
+  const { star, capsule, moment, moon, quest } = await searchParams;
 
   return (
     <main className="universe-page">
@@ -310,12 +383,14 @@ export default async function UniversePage({
         capsules={universeCapsules}
         moments={universeMoments}
         milestones={universeMilestones}
+        quests={universeQuests}
         age={age}
         canInvite={canInvite}
         initialSelectedId={star ?? null}
         initialCapsuleId={capsule ?? null}
         initialMomentId={moment ?? null}
         initialMoonId={moon ?? null}
+        initialQuestId={quest ?? null}
         today={today}
         sky={skyFromMoods(todaysMoods)}
         checkins={checkins.data.map((row) => ({

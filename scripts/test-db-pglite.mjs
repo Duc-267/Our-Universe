@@ -37,6 +37,7 @@ try {
   await database.exec(readFileSync("supabase/migrations/20261014140000_phase1_photos_capsules.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261014153000_phase2_same_moment.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261015120000_phase3_moons_milestones.sql", "utf8"));
+  await database.exec(readFileSync("supabase/migrations/20261015200000_phase3_quests.sql", "utf8"));
   await query("insert into public.profiles (id, display_name) select id, raw_user_meta_data ->> 'display_name' from auth.users");
   await query(
     "insert into auth.users(id, raw_user_meta_data) values ($1, $2::jsonb)",
@@ -426,6 +427,38 @@ try {
       [coupleA],
     ))[0].d,
     "2021-02-28",
+  );
+
+  await asUser(userIds.alex);
+  const [{ start_quest: questId }] = await query("select public.start_quest($1)", ["photograph_sky"]);
+  await rejected(() => query("select public.start_quest($1)", ["favorite_song"]), "only one open quest");
+  const questBaseAlex = `${coupleA}/quests/${questId}/${userIds.alex}/`;
+  await asOwner();
+  await query(
+    `insert into storage.objects (id, bucket_id, name, owner_id) values
+      (gen_random_uuid(), 'universe-media', $1, $2),
+      (gen_random_uuid(), 'universe-media', $3, $2)`,
+    [`${questBaseAlex}full.webp`, userIds.alex, `${questBaseAlex}thumb.webp`],
+  );
+  await asUser(userIds.alex);
+  await query("select public.submit_quest($1, null, 'webp', 800, 600)", [questId]);
+  const questBaseBlair = `${coupleA}/quests/${questId}/${userIds.blair}/`;
+  await asOwner();
+  await query(
+    `insert into storage.objects (id, bucket_id, name, owner_id) values
+      (gen_random_uuid(), 'universe-media', $1, $2),
+      (gen_random_uuid(), 'universe-media', $3, $2)`,
+    [`${questBaseBlair}full.webp`, userIds.blair, `${questBaseBlair}thumb.webp`],
+  );
+  await asUser(userIds.blair);
+  await query("select public.submit_quest($1, null, 'webp', 720, 540)", [questId]);
+  assert.equal((await query("select status from public.quests where id = $1", [questId]))[0].status, "complete");
+  assert.equal(
+    (await query(
+      "select count(*)::int as n from public.cosmic_objects where quest_id = $1 and object_type = 'QUEST_REWARD'",
+      [questId],
+    ))[0].n,
+    1,
   );
 
   await asOwner();

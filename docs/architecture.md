@@ -28,6 +28,10 @@
 - `private.refresh_milestones` runs on `/universe` load. It reads `relationship_start_date` and the couple timezone, then inserts missing `milestones` rows for each completed calendar anniversary and for 100 / 365 days together. Anniversary rows also create one `MOON` cosmic object and an `ANNIVERSARY_REACHED` event. Day rows create a `MILESTONE_REACHED` event only. Unique `(couple_id, kind, key)` and one-moon-per-milestone indexes keep refreshes idempotent.
 - Anniversary dates clamp short months the same way as `src/features/couple/age.ts` (Feb 29 becomes Feb 28 in non-leap years). Moon positions are deterministic from the milestone id and anniversary number and are drawn as an extra canvas pass.
 
+### Application (Phase 3 — quests)
+- A couple may have one open `quests` row at a time. Publishing copies a fixed catalog entry (title, instructions, response type, reward kind) and a 48-hour expiry. Each member submits once through `private.submit_quest`; photo responses reuse the private media bucket under `<couple>/quests/...`.
+- Both submissions complete the quest, write `QUEST_COMPLETED`, and create one `QUEST_REWARD` cosmic object whose `metadata.reward_kind` is fragment, asteroid, flower, nebula, or special star. Expiry with fewer than two submissions marks the quest incomplete and creates no reward. `/universe` calls `refresh_quests` and draws rewards as an extra canvas pass.
+
 ## Core modules
 - `scripts/run-skills.sh`: reads `skills/enabled.txt`, executes each skill script, and aggregates failures into a single exit code.
 - `skills/*/*.sh`: small, composable validation units for requirements presence, architecture quality, and DoD completeness.
@@ -81,3 +85,4 @@
 - 2026-10-14: Treat `main` as the sole integration and release branch. Every phase and repository change starts on a dedicated branch and reaches `main` through a pull request after local validation and required CI pass; direct feature commits and local feature merges into `main` are not part of the delivery flow.
 - 2026-10-14: Store Phase 1 photos and capsule images in private Supabase Storage instead of Cloudflare R2. One bucket keeps media authorization in PostgreSQL RLS beside the couple data. The browser resizes uploads and sends only the optimized image and thumbnail; hidden capsule content stays in `capsule_contents`, not in the visible capsule row.
 - 2026-10-15: Phase 3 moons and day milestones stay on the canvas projector. A `milestones` table owns anniversary and day keys; moons are cosmic objects keyed by `milestone_id`. React Three Fiber remains deferred until trip planets need meshes.
+- 2026-10-15: Couple quests use a fixed catalog in PostgreSQL and TypeScript, one open quest per couple, and a single `QUEST_REWARD` object type with `reward_kind` metadata so the canvas can vary shape without new object-type churn.
