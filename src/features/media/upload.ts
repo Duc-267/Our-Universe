@@ -97,6 +97,38 @@ export async function uploadSameMoment(
   }
 }
 
+export async function submitQuestResponse(
+  supabase: SupabaseClient,
+  coupleId: string,
+  questId: string,
+  userId: string,
+  body: string | null,
+  photo: PreparedPhoto | null,
+) {
+  let stored: { fullPath: string; thumbPath: string } | null = null;
+  if (photo) {
+    const base = `${coupleId.toLowerCase()}/quests/${questId.toLowerCase()}/${userId.toLowerCase()}/`;
+    stored = await uploadPair(supabase, base, photo);
+  }
+  const { error } = await supabase.rpc("submit_quest", {
+    p_quest_id: questId,
+    p_body: body,
+    p_extension: photo?.extension ?? null,
+    p_width: photo?.width ?? null,
+    p_height: photo?.height ?? null,
+  });
+  if (error) {
+    if (stored) await supabase.storage.from("universe-media").remove([stored.fullPath, stored.thumbPath]);
+    if (error.message.includes("already_submitted")) throw new Error("You already answered this quest.");
+    if (error.message.includes("quest_closed")) throw new Error("This quest has closed.");
+    if (error.message.includes("invalid_response")) throw new Error("Add the text this quest asks for.");
+    if (error.message.includes("invalid_photo") || error.message.includes("photo_files_missing")) {
+      throw new Error("Add a photo for this quest.");
+    }
+    throw new Error("Could not submit this quest.");
+  }
+}
+
 export async function uploadCapsuleImage(
   supabase: SupabaseClient,
   coupleId: string,

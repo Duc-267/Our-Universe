@@ -56,13 +56,26 @@ export type SceneMoon = {
   visualSeed: number;
 };
 
-type SceneTarget = { kind: "star" | "capsule" | "moment" | "moon"; id: string };
+export type SceneReward = {
+  questId: string;
+  title: string;
+  rewardKind: string;
+  positionX: number;
+  positionY: number;
+  positionZ: number;
+  scale: number;
+  rotation: number;
+  visualSeed: number;
+};
+
+type SceneTarget = { kind: "star" | "capsule" | "moment" | "moon" | "quest"; id: string };
 
 type Props = {
   stars: SceneStar[];
   capsules: SceneCapsule[];
   twins: SceneTwin[];
   moons: SceneMoon[];
+  rewards: SceneReward[];
   selectedId: string | null;
   onSelect: (target: SceneTarget | null) => void;
   sky: CoupleSky;
@@ -183,13 +196,14 @@ function makeMoon(): HTMLCanvasElement {
   return moon;
 }
 
-export function UniverseScene({ stars, capsules, twins, moons, selectedId, onSelect, sky, bornId, cheer }: Props) {
+export function UniverseScene({ stars, capsules, twins, moons, rewards, selectedId, onSelect, sky, bornId, cheer }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frontRef = useRef<HTMLCanvasElement>(null);
   const starsRef = useRef(stars);
   const capsulesRef = useRef(capsules);
   const twinsRef = useRef(twins);
   const moonsRef = useRef(moons);
+  const rewardsRef = useRef(rewards);
   const selectedRef = useRef(selectedId);
   const selectRef = useRef(onSelect);
   const skyRef = useRef(sky);
@@ -205,6 +219,7 @@ export function UniverseScene({ stars, capsules, twins, moons, selectedId, onSel
     capsulesRef.current = capsules;
     twinsRef.current = twins;
     moonsRef.current = moons;
+    rewardsRef.current = rewards;
     selectedRef.current = selectedId;
     selectRef.current = onSelect;
     skyRef.current = sky;
@@ -326,6 +341,13 @@ export function UniverseScene({ stars, capsules, twins, moons, selectedId, onSel
       return { moon, x: point.x, y: point.y, depth: point.depth, r: base };
     };
 
+    const projectReward = (reward: SceneReward) => {
+      const point = projectPoint(reward.positionX, reward.positionY, reward.positionZ, 1, 0);
+      if (!point) return null;
+      const base = Math.max(16, reward.scale * 5.0 * (focal() / point.depth));
+      return { reward, x: point.x, y: point.y, depth: point.depth, r: base };
+    };
+
     const hitTest = (px: number, py: number): SceneTarget | null => {
       let best: SceneTarget | null = null;
       let bestDistance = Number.POSITIVE_INFINITY;
@@ -351,6 +373,10 @@ export function UniverseScene({ stars, capsules, twins, moons, selectedId, onSel
       for (const moon of moonsRef.current) {
         const projected = projectMoon(moon);
         if (projected) consider(moon.milestoneId, "moon", projected.x, projected.y, projected.r);
+      }
+      for (const reward of rewardsRef.current) {
+        const projected = projectReward(reward);
+        if (projected) consider(reward.questId, "quest", projected.x, projected.y, projected.r);
       }
       return best;
     };
@@ -711,6 +737,83 @@ export function UniverseScene({ stars, capsules, twins, moons, selectedId, onSel
       }
     };
 
+    const rewardColor = (kind: string) => {
+      switch (kind) {
+        case "ASTEROID":
+          return "#c9b8a6";
+        case "FLOWER":
+          return "#ff8fab";
+        case "NEBULA":
+          return "#b7a0ff";
+        case "SPECIAL_STAR":
+          return "#ffd23a";
+        default:
+          return "#8fd3ff";
+      }
+    };
+
+    const drawReward = (entry: NonNullable<ReturnType<typeof projectReward>>, time: number) => {
+      const { reward, x, y, r } = entry;
+      const reduced = reducedMotion.matches;
+      const pulse = reduced ? 1 : 0.85 + 0.15 * Math.sin(time / 900 + reward.visualSeed);
+      const fill = rewardColor(reward.rewardKind);
+      ctx.save();
+      ctx.globalAlpha = clamp(1.15 - entry.depth / (cam.dist + 110), 0.55, 1);
+      ctx.translate(x, y);
+      ctx.rotate(reward.rotation + (reduced ? 0 : time / 8000));
+      ctx.fillStyle = fill;
+      ctx.strokeStyle = STICKER_INK;
+      ctx.lineWidth = 2;
+      if (reward.rewardKind === "FLOWER") {
+        for (let i = 0; i < 5; i += 1) {
+          ctx.beginPath();
+          ctx.ellipse(0, -r * 0.35 * pulse, r * 0.22, r * 0.38, (i * Math.PI * 2) / 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.18, 0, Math.PI * 2);
+        ctx.fillStyle = CREAM;
+        ctx.fill();
+        ctx.stroke();
+      } else if (reward.rewardKind === "NEBULA") {
+        ctx.globalAlpha *= 0.85;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, r * 0.9 * pulse, r * 0.55 * pulse, 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else if (reward.rewardKind === "SPECIAL_STAR") {
+        drawSparkle(0, 0, r * 0.9 * pulse, fill, 1);
+        ctx.strokeStyle = STICKER_INK;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.35, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.moveTo(0, -r * 0.55 * pulse);
+        ctx.lineTo(r * 0.45 * pulse, 0);
+        ctx.lineTo(0, r * 0.55 * pulse);
+        ctx.lineTo(-r * 0.45 * pulse, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+      if (reward.questId === selectedRef.current) {
+        ctx.save();
+        ctx.strokeStyle = CREAM;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.arc(x, y, r * 1.4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      if (reward.questId === hoverId || reward.questId === selectedRef.current) {
+        labels.push({ x, y: y - r * 1.45, text: reward.title });
+      }
+    };
+
     const drawTwinLinks = (projectedTwins: NonNullable<ReturnType<typeof projectTwin>>[]) => {
       const byMoment = new Map<string, NonNullable<ReturnType<typeof projectTwin>>[]>();
       for (const entry of projectedTwins) {
@@ -783,6 +886,10 @@ export function UniverseScene({ stars, capsules, twins, moons, selectedId, onSel
           .map((moon) => projectMoon(moon))
           .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
           .map((entry) => ({ depth: entry.depth, paint: () => drawMoon(entry, time) })),
+        ...rewardsRef.current
+          .map((reward) => projectReward(reward))
+          .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+          .map((entry) => ({ depth: entry.depth, paint: () => drawReward(entry, time) })),
       ].sort((a, b) => b.depth - a.depth);
       labels.length = 0;
 

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
 import { CheckInPanel, type CheckinRow } from "@/components/check-in-panel";
 import { MilestonesPanel, type UniverseMilestone } from "@/components/milestones-panel";
+import { QuestDialog, QuestPanel, type QuestRow } from "@/components/quest-panel";
 import { SameMomentDialog, SameMomentPanel, type SameMomentRow } from "@/components/same-moment-panel";
 import type { RelationshipAge } from "@/features/couple/age";
 import type { CoupleSky } from "@/features/checkin/weather";
@@ -18,6 +19,7 @@ import {
   UniverseScene,
   type SceneCapsule,
   type SceneMoon,
+  type SceneReward,
   type SceneStar,
   type SceneTwin,
 } from "./universe-scene";
@@ -66,7 +68,7 @@ export type UniverseCapsule = {
   } | null;
 };
 
-type Selection = { kind: "star" | "capsule" | "moment" | "moon"; id: string } | null;
+type Selection = { kind: "star" | "capsule" | "moment" | "moon" | "quest"; id: string } | null;
 
 type Props = {
   coupleId: string;
@@ -75,12 +77,14 @@ type Props = {
   capsules: UniverseCapsule[];
   moments: SameMomentRow[];
   milestones: UniverseMilestone[];
+  quests: QuestRow[];
   age: RelationshipAge;
   canInvite: boolean;
   initialSelectedId: string | null;
   initialCapsuleId: string | null;
   initialMomentId: string | null;
   initialMoonId: string | null;
+  initialQuestId: string | null;
   today: string;
   checkins: CheckinRow[];
   sky: CoupleSky;
@@ -161,12 +165,14 @@ export function UniverseView({
   capsules,
   moments,
   milestones,
+  quests,
   age,
   canInvite,
   initialSelectedId,
   initialCapsuleId,
   initialMomentId,
   initialMoonId,
+  initialQuestId,
   today,
   checkins,
   sky,
@@ -180,7 +186,9 @@ export function UniverseView({
         ? { kind: "moment", id: initialMomentId }
         : initialMoonId
           ? { kind: "moon", id: initialMoonId }
-          : null;
+          : initialQuestId
+            ? { kind: "quest", id: initialQuestId }
+            : null;
   const [selected, setSelected] = useState<Selection>(initialSelection);
   const [seenSelection, setSeenSelection] = useState(initialSelection?.id ?? null);
   const [bornId, setBornId] = useState<string | null>(initialSelection?.id ?? null);
@@ -201,6 +209,7 @@ export function UniverseView({
       ...capsules.map((capsule) => capsule.id),
       ...moments.filter((moment) => moment.status === "complete").map((moment) => moment.id),
       ...milestones.filter((milestone) => milestone.kind === "anniversary").map((milestone) => milestone.id),
+      ...quests.filter((quest) => quest.status === "complete").map((quest) => quest.id),
     ];
     if (knownIds.current) {
       const fresh = ids.find((id) => !knownIds.current?.has(id));
@@ -210,7 +219,7 @@ export function UniverseView({
       }
     }
     knownIds.current = new Set(ids);
-  }, [memories, capsules, moments, milestones]);
+  }, [memories, capsules, moments, milestones, quests]);
 
   useEffect(() => {
     if (!bornId) return;
@@ -272,6 +281,16 @@ export function UniverseView({
         { event: "*", schema: "public", table: "milestones", filter: `couple_id=eq.${coupleId}` },
         () => router.refresh(),
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "quests", filter: `couple_id=eq.${coupleId}` },
+        () => router.refresh(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "quest_submissions", filter: `couple_id=eq.${coupleId}` },
+        () => router.refresh(),
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
@@ -290,6 +309,9 @@ export function UniverseView({
   const selectedMilestone = selected?.kind === "moon"
     ? milestones.find((milestone) => milestone.id === selected.id) ?? null
     : null;
+  const selectedQuest = selected?.kind === "quest"
+    ? quests.find((quest) => quest.id === selected.id) ?? null
+    : null;
   const isAnniversary = age.nextAnniversary?.daysAway === 0;
 
   const closeDetail = () => {
@@ -299,6 +321,7 @@ export function UniverseView({
       || window.location.search.includes("capsule=")
       || window.location.search.includes("moment=")
       || window.location.search.includes("moon=")
+      || window.location.search.includes("quest=")
     ) {
       window.history.replaceState(null, "", "/universe");
     }
@@ -359,6 +382,19 @@ export function UniverseView({
       rotation: milestone.moon!.rotation,
       visualSeed: milestone.moon!.visualSeed,
     }));
+  const sceneRewards: SceneReward[] = quests
+    .filter((quest) => quest.reward)
+    .map((quest) => ({
+      questId: quest.id,
+      title: quest.title,
+      rewardKind: quest.rewardKind,
+      positionX: quest.reward!.positionX,
+      positionY: quest.reward!.positionY,
+      positionZ: quest.reward!.positionZ,
+      scale: quest.reward!.scale,
+      rotation: quest.reward!.rotation,
+      visualSeed: quest.reward!.visualSeed,
+    }));
 
   return (
     <div className="universe-shell">
@@ -370,6 +406,7 @@ export function UniverseView({
             capsules={sceneCapsules}
             twins={sceneTwins}
             moons={sceneMoons}
+            rewards={sceneRewards}
             selectedId={selected?.id ?? null}
             onSelect={setSelected}
             sky={sky}
@@ -408,6 +445,13 @@ export function UniverseView({
             moments={moments}
             selectedId={selected?.kind === "moment" ? selected.id : null}
             onSelect={(id) => setSelected(id ? { kind: "moment", id } : null)}
+          />
+          <QuestPanel
+            coupleId={coupleId}
+            userId={userId}
+            quests={quests}
+            selectedId={selected?.kind === "quest" ? selected.id : null}
+            onSelect={(id) => setSelected(id ? { kind: "quest", id } : null)}
           />
           <MilestonesPanel
             milestones={milestones}
@@ -488,6 +532,7 @@ export function UniverseView({
       {selectedCapsule && <CapsuleDialog capsule={selectedCapsule} onClose={closeDetail} />}
       {selectedMoment && <SameMomentDialog moment={selectedMoment} onClose={closeDetail} />}
       {selectedMilestone && <MoonDialog milestone={selectedMilestone} onClose={closeDetail} />}
+      {selectedQuest && <QuestDialog quest={selectedQuest} onClose={closeDetail} />}
     </div>
   );
 }
