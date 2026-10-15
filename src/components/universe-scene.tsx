@@ -79,7 +79,16 @@ export type ScenePlanet = {
   visualSeed: number;
 };
 
-type SceneTarget = { kind: "star" | "capsule" | "moment" | "moon" | "quest" | "trip"; id: string };
+export type SceneConstellation = {
+  id: string;
+  name: string;
+  memoryIds: string[];
+};
+
+type SceneTarget = {
+  kind: "star" | "capsule" | "moment" | "moon" | "quest" | "trip" | "constellation";
+  id: string;
+};
 
 type Props = {
   stars: SceneStar[];
@@ -88,6 +97,7 @@ type Props = {
   moons: SceneMoon[];
   rewards: SceneReward[];
   planets: ScenePlanet[];
+  constellations: SceneConstellation[];
   selectedId: string | null;
   onSelect: (target: SceneTarget | null) => void;
   sky: CoupleSky;
@@ -208,7 +218,20 @@ function makeMoon(): HTMLCanvasElement {
   return moon;
 }
 
-export function UniverseScene({ stars, capsules, twins, moons, rewards, planets, selectedId, onSelect, sky, bornId, cheer }: Props) {
+export function UniverseScene({
+  stars,
+  capsules,
+  twins,
+  moons,
+  rewards,
+  planets,
+  constellations,
+  selectedId,
+  onSelect,
+  sky,
+  bornId,
+  cheer,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frontRef = useRef<HTMLCanvasElement>(null);
   const starsRef = useRef(stars);
@@ -217,6 +240,7 @@ export function UniverseScene({ stars, capsules, twins, moons, rewards, planets,
   const moonsRef = useRef(moons);
   const rewardsRef = useRef(rewards);
   const planetsRef = useRef(planets);
+  const constellationsRef = useRef(constellations);
   const selectedRef = useRef(selectedId);
   const selectRef = useRef(onSelect);
   const skyRef = useRef(sky);
@@ -234,6 +258,7 @@ export function UniverseScene({ stars, capsules, twins, moons, rewards, planets,
     moonsRef.current = moons;
     rewardsRef.current = rewards;
     planetsRef.current = planets;
+    constellationsRef.current = constellations;
     selectedRef.current = selectedId;
     selectRef.current = onSelect;
     skyRef.current = sky;
@@ -403,7 +428,63 @@ export function UniverseScene({ stars, capsules, twins, moons, rewards, planets,
         const projected = projectPlanet(planet);
         if (projected) consider(planet.tripId, "trip", projected.x, projected.y, projected.r);
       }
+      if (!best) {
+        for (const constellation of constellationsRef.current) {
+          const points = constellationPoints(constellation);
+          if (points.length < 2) continue;
+          let cx = 0;
+          let cy = 0;
+          for (const point of points) {
+            cx += point.x;
+            cy += point.y;
+          }
+          cx /= points.length;
+          cy /= points.length;
+          consider(constellation.id, "constellation", cx, cy, 22);
+          for (let i = 0; i < points.length; i += 1) {
+            const a = points[i];
+            const b = points[(i + 1) % points.length];
+            const distance = distanceToSegment(px, py, a.x, a.y, b.x, b.y);
+            if (distance <= 10 && distance < bestDistance) {
+              best = { kind: "constellation", id: constellation.id };
+              bestDistance = distance;
+            }
+          }
+        }
+      }
       return best;
+    };
+
+    const constellationPoints = (constellation: SceneConstellation) => {
+      const byId = new Map(starsRef.current.map((star) => [star.memoryId, star]));
+      const projected = constellation.memoryIds
+        .map((memoryId) => {
+          const star = byId.get(memoryId);
+          return star ? projectStar(star) : null;
+        })
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+      if (projected.length < 2) return [];
+      const cx = projected.reduce((sum, entry) => sum + entry.x, 0) / projected.length;
+      const cy = projected.reduce((sum, entry) => sum + entry.y, 0) / projected.length;
+      return projected
+        .map((entry) => ({ ...entry, angle: Math.atan2(entry.y - cy, entry.x - cx) }))
+        .sort((a, b) => a.angle - b.angle);
+    };
+
+    const distanceToSegment = (
+      px: number,
+      py: number,
+      ax: number,
+      ay: number,
+      bx: number,
+      by: number,
+    ) => {
+      const dx = bx - ax;
+      const dy = by - ay;
+      const lengthSq = dx * dx + dy * dy;
+      if (lengthSq === 0) return Math.hypot(px - ax, py - ay);
+      const t = clamp(((px - ax) * dx + (py - ay) * dy) / lengthSq, 0, 1);
+      return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
     };
 
     const drawOrbit = (time: number, near: boolean, centerDepth: number) => {
@@ -907,6 +988,32 @@ export function UniverseScene({ stars, capsules, twins, moons, rewards, planets,
       ctx.restore();
     };
 
+    const drawConstellations = () => {
+      for (const constellation of constellationsRef.current) {
+        const points = constellationPoints(constellation);
+        if (points.length < 2) continue;
+        const selected = constellation.id === selectedRef.current;
+        const hovered = constellation.id === hoverId;
+        ctx.save();
+        ctx.strokeStyle = selected || hovered
+          ? "rgba(255, 246, 230, 0.95)"
+          : "rgba(186, 168, 255, 0.72)";
+        ctx.lineWidth = selected || hovered ? 2.4 : 1.7;
+        ctx.setLineDash(selected || hovered ? [] : [5, 7]);
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i += 1) ctx.lineTo(points[i].x, points[i].y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+        if (selected || hovered) {
+          const cx = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+          const cy = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+          labels.push({ x: cx, y: cy - 18, text: constellation.name });
+        }
+      }
+    };
+
     const placeDuck = (time: number) => {
       const node = duckRef.current;
       const motion = duckMotionRef.current;
@@ -977,6 +1084,7 @@ export function UniverseScene({ stars, capsules, twins, moons, rewards, planets,
       drawOrbit(time, false, centerDepth);
       drawMotes(time, false, centerDepth);
       drawTwinLinks(twinEntries.filter((entry) => entry.depth >= centerDepth));
+      drawConstellations();
       for (const entry of projected) if (entry.depth >= centerDepth) entry.paint();
 
       ctx = frontCtx;

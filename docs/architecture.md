@@ -35,6 +35,9 @@
 ### Application (Phase 3 — trips)
 - `trips` store destination, start/end dates, optional note, and a `significant` flag. `trip_memories` links existing couple memories (and therefore their photos) to a trip. Marking significant runs `private.sync_trip_planet`, which upserts a `TRIP_PLANET` event and one `PLANET` cosmic object; unmarking removes both. Planets are drawn as an extra canvas pass and open trip detail.
 
+### Application (Phase 3 — constellations)
+- `constellations` name a group of existing memory stars; `constellation_members` requires at least two memories from the same couple. There is no new cosmic object type — the canvas draws soft closed lines through the member stars' stored positions and opens the collection detail on select. Deleting a memory cascades the membership row away.
+
 ## Core modules
 - `scripts/run-skills.sh`: reads `skills/enabled.txt`, executes each skill script, and aggregates failures into a single exit code.
 - `skills/*/*.sh`: small, composable validation units for requirements presence, architecture quality, and DoD completeness.
@@ -90,3 +93,4 @@
 - 2026-10-15: Phase 3 moons and day milestones stay on the canvas projector. A `milestones` table owns anniversary and day keys; moons are cosmic objects keyed by `milestone_id`. React Three Fiber remains deferred.
 - 2026-10-15: Couple quests use a fixed catalog in PostgreSQL and TypeScript, one open quest per couple, and a single `QUEST_REWARD` object type with `reward_kind` metadata so the canvas can vary shape without new object-type churn.
 - 2026-10-15: Significant trips become `PLANET` objects keyed by `trip_id`. Trip photos in this slice are the linked memories' photos rather than a separate upload path, keeping Storage rules unchanged.
+- 2026-10-15: Constellations are membership overlays on existing stars, not new cosmic objects. Lines are an extra canvas pass; React Three Fiber stays deferred.

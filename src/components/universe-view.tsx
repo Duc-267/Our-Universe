@@ -9,6 +9,11 @@ import { MilestonesPanel, type UniverseMilestone } from "@/components/milestones
 import { QuestDialog, QuestPanel, type QuestRow } from "@/components/quest-panel";
 import { SameMomentDialog, SameMomentPanel, type SameMomentRow } from "@/components/same-moment-panel";
 import { TripDialog, TripPanel, type TripRow } from "@/components/trip-panel";
+import {
+  ConstellationDialog,
+  ConstellationPanel,
+  type ConstellationRow,
+} from "@/components/constellation-panel";
 import type { RelationshipAge } from "@/features/couple/age";
 import type { CoupleSky } from "@/features/checkin/weather";
 import { deleteCapsule, openCapsule } from "@/features/capsule/actions";
@@ -19,6 +24,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   UniverseScene,
   type SceneCapsule,
+  type SceneConstellation,
   type SceneMoon,
   type ScenePlanet,
   type SceneReward,
@@ -70,7 +76,9 @@ export type UniverseCapsule = {
   } | null;
 };
 
-type Selection = { kind: "star" | "capsule" | "moment" | "moon" | "quest" | "trip"; id: string } | null;
+type Selection =
+  | { kind: "star" | "capsule" | "moment" | "moon" | "quest" | "trip" | "constellation"; id: string }
+  | null;
 
 type Props = {
   coupleId: string;
@@ -81,6 +89,7 @@ type Props = {
   milestones: UniverseMilestone[];
   quests: QuestRow[];
   trips: TripRow[];
+  constellations: ConstellationRow[];
   age: RelationshipAge;
   canInvite: boolean;
   initialSelectedId: string | null;
@@ -89,6 +98,7 @@ type Props = {
   initialMoonId: string | null;
   initialQuestId: string | null;
   initialTripId: string | null;
+  initialConstellationId: string | null;
   today: string;
   checkins: CheckinRow[];
   sky: CoupleSky;
@@ -171,6 +181,7 @@ export function UniverseView({
   milestones,
   quests,
   trips,
+  constellations,
   age,
   canInvite,
   initialSelectedId,
@@ -179,6 +190,7 @@ export function UniverseView({
   initialMoonId,
   initialQuestId,
   initialTripId,
+  initialConstellationId,
   today,
   checkins,
   sky,
@@ -196,7 +208,9 @@ export function UniverseView({
             ? { kind: "quest", id: initialQuestId }
             : initialTripId
               ? { kind: "trip", id: initialTripId }
-              : null;
+              : initialConstellationId
+                ? { kind: "constellation", id: initialConstellationId }
+                : null;
   const [selected, setSelected] = useState<Selection>(initialSelection);
   const [seenSelection, setSeenSelection] = useState(initialSelection?.id ?? null);
   const [bornId, setBornId] = useState<string | null>(initialSelection?.id ?? null);
@@ -310,6 +324,21 @@ export function UniverseView({
         { event: "*", schema: "public", table: "trip_memories", filter: `couple_id=eq.${coupleId}` },
         () => router.refresh(),
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "constellations", filter: `couple_id=eq.${coupleId}` },
+        () => router.refresh(),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "constellation_members",
+          filter: `couple_id=eq.${coupleId}`,
+        },
+        () => router.refresh(),
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
@@ -334,6 +363,9 @@ export function UniverseView({
   const selectedTrip = selected?.kind === "trip"
     ? trips.find((trip) => trip.id === selected.id) ?? null
     : null;
+  const selectedConstellation = selected?.kind === "constellation"
+    ? constellations.find((row) => row.id === selected.id) ?? null
+    : null;
   const isAnniversary = age.nextAnniversary?.daysAway === 0;
 
   const closeDetail = () => {
@@ -345,6 +377,7 @@ export function UniverseView({
       || window.location.search.includes("moon=")
       || window.location.search.includes("quest=")
       || window.location.search.includes("trip=")
+      || window.location.search.includes("constellation=")
     ) {
       window.history.replaceState(null, "", "/universe");
     }
@@ -430,6 +463,11 @@ export function UniverseView({
       rotation: trip.planet!.rotation,
       visualSeed: trip.planet!.visualSeed,
     }));
+  const sceneConstellations: SceneConstellation[] = constellations.map((row) => ({
+    id: row.id,
+    name: row.name,
+    memoryIds: row.memories.map((memory) => memory.id),
+  }));
 
   return (
     <div className="universe-shell">
@@ -443,6 +481,7 @@ export function UniverseView({
             moons={sceneMoons}
             rewards={sceneRewards}
             planets={scenePlanets}
+            constellations={sceneConstellations}
             selectedId={selected?.id ?? null}
             onSelect={setSelected}
             sky={sky}
@@ -459,6 +498,7 @@ export function UniverseView({
             </Link>
             <Link className="universe-seal" href="/capsule/new">Seal a capsule</Link>
             <Link className="universe-seal" href="/trip/new">Add a trip</Link>
+            <Link className="universe-seal" href="/constellation/new">Group stars</Link>
           </div>
           {memories.length === 0 && capsules.length === 0 && (
             <section className="universe-empty-overlay" aria-labelledby="universe-title">
@@ -494,6 +534,11 @@ export function UniverseView({
             trips={trips}
             selectedId={selected?.kind === "trip" ? selected.id : null}
             onSelect={(id) => setSelected(id ? { kind: "trip", id } : null)}
+          />
+          <ConstellationPanel
+            constellations={constellations}
+            selectedId={selected?.kind === "constellation" ? selected.id : null}
+            onSelect={(id) => setSelected(id ? { kind: "constellation", id } : null)}
           />
           <MilestonesPanel
             milestones={milestones}
@@ -578,6 +623,17 @@ export function UniverseView({
       {selectedTrip && (
         <TripDialog
           trip={selectedTrip}
+          availableMemories={memories.map((memory) => ({
+            id: memory.id,
+            title: memory.title,
+            memoryDate: memory.memoryDate,
+          }))}
+          onClose={closeDetail}
+        />
+      )}
+      {selectedConstellation && (
+        <ConstellationDialog
+          constellation={selectedConstellation}
           availableMemories={memories.map((memory) => ({
             id: memory.id,
             title: memory.title,

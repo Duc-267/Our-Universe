@@ -5,6 +5,7 @@ import type { UniverseMilestone } from "@/components/milestones-panel";
 import type { QuestRow } from "@/components/quest-panel";
 import type { SameMomentRow } from "@/components/same-moment-panel";
 import type { TripRow } from "@/components/trip-panel";
+import type { ConstellationRow } from "@/components/constellation-panel";
 import { todayInZone, computeRelationshipAge } from "@/features/couple/age";
 import { skyFromMoods } from "@/features/checkin/weather";
 import type { QuestResponseType, QuestRewardKind } from "@/features/quest/catalog";
@@ -42,6 +43,7 @@ export default async function UniversePage({
     moon?: string;
     quest?: string;
     trip?: string;
+    constellation?: string;
   }>;
 }) {
   const { supabase, userId } = await requireUser();
@@ -52,7 +54,7 @@ export default async function UniversePage({
   await supabase.rpc("refresh_milestones");
   await supabase.rpc("refresh_quests");
 
-  const [couple, settings, members, memories, photos, objects, capsules, contents, checkins, moments, submissions, milestones, quests, questSubmissions, trips, tripMemories] =
+  const [couple, settings, members, memories, photos, objects, capsules, contents, checkins, moments, submissions, milestones, quests, questSubmissions, trips, tripMemories, constellations, constellationMembers] =
     await Promise.all([
       supabase
         .from("couples")
@@ -141,6 +143,15 @@ export default async function UniversePage({
         .from("trip_memories")
         .select("trip_id, memory_id")
         .eq("couple_id", coupleId),
+      supabase
+        .from("constellations")
+        .select("id, name, note, created_by, created_at")
+        .eq("couple_id", coupleId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("constellation_members")
+        .select("constellation_id, memory_id")
+        .eq("couple_id", coupleId),
     ]);
   if (
     couple.error ||
@@ -158,7 +169,9 @@ export default async function UniversePage({
     quests.error ||
     questSubmissions.error ||
     trips.error ||
-    tripMemories.error
+    tripMemories.error ||
+    constellations.error ||
+    constellationMembers.error
   ) {
     throw new Error("Could not load your universe.");
   }
@@ -431,13 +444,37 @@ export default async function UniversePage({
     planet: planetByTrip.get(trip.id) ?? null,
   }));
 
+  const memoriesByConstellation = new Map<string, string[]>();
+  for (const link of constellationMembers.data) {
+    const list = memoriesByConstellation.get(link.constellation_id) ?? [];
+    list.push(link.memory_id);
+    memoriesByConstellation.set(link.constellation_id, list);
+  }
+  const universeConstellations: ConstellationRow[] = constellations.data.map((row) => ({
+    id: row.id,
+    name: row.name,
+    note: row.note,
+    createdByName:
+      nameByUser.get(row.created_by) ||
+      (row.created_by === userId ? "You" : "Your partner"),
+    memories: (memoriesByConstellation.get(row.id) ?? [])
+      .map((memoryId) => memoryLookup.get(memoryId))
+      .filter((memory): memory is UniverseMemory => Boolean(memory))
+      .map((memory) => ({
+        id: memory.id,
+        title: memory.title,
+        memoryDate: memory.memoryDate,
+        thumbUrl: memory.photos[0]?.thumbUrl ?? null,
+      })),
+  }));
+
   const today = todayInZone(settings.data.timezone);
   const todaysMoods = checkins.data
     .filter((row) => row.local_date === today)
     .map((row) => row.mood);
   const age = computeRelationshipAge(couple.data.relationship_start_date, settings.data.timezone);
   const canInvite = couple.data.created_by === userId && members.data.length < 2;
-  const { star, capsule, moment, moon, quest, trip } = await searchParams;
+  const { star, capsule, moment, moon, quest, trip, constellation } = await searchParams;
 
   return (
     <main className="universe-page">
@@ -451,6 +488,7 @@ export default async function UniversePage({
         milestones={universeMilestones}
         quests={universeQuests}
         trips={universeTrips}
+        constellations={universeConstellations}
         age={age}
         canInvite={canInvite}
         initialSelectedId={star ?? null}
@@ -459,6 +497,7 @@ export default async function UniversePage({
         initialMoonId={moon ?? null}
         initialQuestId={quest ?? null}
         initialTripId={trip ?? null}
+        initialConstellationId={constellation ?? null}
         today={today}
         sky={skyFromMoods(todaysMoods)}
         checkins={checkins.data.map((row) => ({
