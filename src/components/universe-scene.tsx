@@ -44,12 +44,25 @@ export type SceneTwin = {
   visualSeed: number;
 };
 
-type SceneTarget = { kind: "star" | "capsule" | "moment"; id: string };
+export type SceneMoon = {
+  milestoneId: string;
+  title: string;
+  number: number;
+  positionX: number;
+  positionY: number;
+  positionZ: number;
+  scale: number;
+  rotation: number;
+  visualSeed: number;
+};
+
+type SceneTarget = { kind: "star" | "capsule" | "moment" | "moon"; id: string };
 
 type Props = {
   stars: SceneStar[];
   capsules: SceneCapsule[];
   twins: SceneTwin[];
+  moons: SceneMoon[];
   selectedId: string | null;
   onSelect: (target: SceneTarget | null) => void;
   sky: CoupleSky;
@@ -170,12 +183,13 @@ function makeMoon(): HTMLCanvasElement {
   return moon;
 }
 
-export function UniverseScene({ stars, capsules, twins, selectedId, onSelect, sky, bornId, cheer }: Props) {
+export function UniverseScene({ stars, capsules, twins, moons, selectedId, onSelect, sky, bornId, cheer }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frontRef = useRef<HTMLCanvasElement>(null);
   const starsRef = useRef(stars);
   const capsulesRef = useRef(capsules);
   const twinsRef = useRef(twins);
+  const moonsRef = useRef(moons);
   const selectedRef = useRef(selectedId);
   const selectRef = useRef(onSelect);
   const skyRef = useRef(sky);
@@ -190,6 +204,7 @@ export function UniverseScene({ stars, capsules, twins, selectedId, onSelect, sk
     starsRef.current = stars;
     capsulesRef.current = capsules;
     twinsRef.current = twins;
+    moonsRef.current = moons;
     selectedRef.current = selectedId;
     selectRef.current = onSelect;
     skyRef.current = sky;
@@ -304,6 +319,13 @@ export function UniverseScene({ stars, capsules, twins, selectedId, onSelect, sk
       return { twin, x: point.x, y: point.y, depth: point.depth, r: base };
     };
 
+    const projectMoon = (moon: SceneMoon) => {
+      const point = projectPoint(moon.positionX, moon.positionY, moon.positionZ, 1, 0);
+      if (!point) return null;
+      const base = Math.max(18, moon.scale * 5.4 * (focal() / point.depth));
+      return { moon, x: point.x, y: point.y, depth: point.depth, r: base };
+    };
+
     const hitTest = (px: number, py: number): SceneTarget | null => {
       let best: SceneTarget | null = null;
       let bestDistance = Number.POSITIVE_INFINITY;
@@ -325,6 +347,10 @@ export function UniverseScene({ stars, capsules, twins, selectedId, onSelect, sk
       for (const twin of twinsRef.current) {
         const projected = projectTwin(twin);
         if (projected) consider(twin.momentId, "moment", projected.x, projected.y, projected.r);
+      }
+      for (const moon of moonsRef.current) {
+        const projected = projectMoon(moon);
+        if (projected) consider(moon.milestoneId, "moon", projected.x, projected.y, projected.r);
       }
       return best;
     };
@@ -643,6 +669,48 @@ export function UniverseScene({ stars, capsules, twins, selectedId, onSelect, sk
       }
     };
 
+    const drawMoon = (entry: NonNullable<ReturnType<typeof projectMoon>>, time: number) => {
+      const { moon, x, y, r } = entry;
+      const reduced = reducedMotion.matches;
+      const glow = reduced ? 0.55 : 0.45 + 0.2 * Math.sin(time / 1400 + moon.number);
+      ctx.save();
+      ctx.globalAlpha = clamp(1.15 - entry.depth / (cam.dist + 120), 0.6, 1);
+      const aura = ctx.createRadialGradient(x, y, r * 0.2, x, y, r * 1.35);
+      aura.addColorStop(0, `rgba(255, 246, 230, ${0.35 + glow * 0.25})`);
+      aura.addColorStop(1, "rgba(255, 246, 230, 0)");
+      ctx.fillStyle = aura;
+      ctx.beginPath();
+      ctx.arc(x, y, r * 1.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#f2ebe0";
+      ctx.strokeStyle = STICKER_INK;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.62, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "rgba(43, 29, 58, 0.18)";
+      ctx.beginPath();
+      ctx.arc(x + r * 0.18, y - r * 0.08, r * 0.42, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
+      ctx.beginPath();
+      ctx.ellipse(x - r * 0.18, y - r * 0.2, r * 0.16, r * 0.1, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+      if (moon.milestoneId === selectedRef.current) {
+        ctx.strokeStyle = CREAM;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.arc(x, y, r * 1.4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+      if (moon.milestoneId === hoverId || moon.milestoneId === selectedRef.current) {
+        labels.push({ x, y: y - r * 1.45, text: moon.title });
+      }
+    };
+
     const drawTwinLinks = (projectedTwins: NonNullable<ReturnType<typeof projectTwin>>[]) => {
       const byMoment = new Map<string, NonNullable<ReturnType<typeof projectTwin>>[]>();
       for (const entry of projectedTwins) {
@@ -711,6 +779,10 @@ export function UniverseScene({ stars, capsules, twins, selectedId, onSelect, sk
           .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
           .map((entry) => ({ depth: entry.depth, paint: () => drawCapsule(entry, time) })),
         ...twinEntries.map((entry) => ({ depth: entry.depth, paint: () => drawTwin(entry, time) })),
+        ...moonsRef.current
+          .map((moon) => projectMoon(moon))
+          .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+          .map((entry) => ({ depth: entry.depth, paint: () => drawMoon(entry, time) })),
       ].sort((a, b) => b.depth - a.depth);
       labels.length = 0;
 

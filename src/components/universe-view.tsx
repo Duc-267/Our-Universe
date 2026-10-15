@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
 import { CheckInPanel, type CheckinRow } from "@/components/check-in-panel";
+import { MilestonesPanel, type UniverseMilestone } from "@/components/milestones-panel";
 import { SameMomentDialog, SameMomentPanel, type SameMomentRow } from "@/components/same-moment-panel";
 import type { RelationshipAge } from "@/features/couple/age";
 import type { CoupleSky } from "@/features/checkin/weather";
@@ -13,7 +14,13 @@ import { deleteMemory, type DeleteMemoryState } from "@/features/memory/actions"
 import { memoryIcon } from "@/features/memory/icons";
 import { categoryColor, STICKER_INK } from "@/features/memory/palette";
 import { createClient } from "@/lib/supabase/client";
-import { UniverseScene, type SceneCapsule, type SceneStar, type SceneTwin } from "./universe-scene";
+import {
+  UniverseScene,
+  type SceneCapsule,
+  type SceneMoon,
+  type SceneStar,
+  type SceneTwin,
+} from "./universe-scene";
 
 export type UniverseMemory = {
   id: string;
@@ -59,7 +66,7 @@ export type UniverseCapsule = {
   } | null;
 };
 
-type Selection = { kind: "star" | "capsule" | "moment"; id: string } | null;
+type Selection = { kind: "star" | "capsule" | "moment" | "moon"; id: string } | null;
 
 type Props = {
   coupleId: string;
@@ -67,11 +74,13 @@ type Props = {
   memories: UniverseMemory[];
   capsules: UniverseCapsule[];
   moments: SameMomentRow[];
+  milestones: UniverseMilestone[];
   age: RelationshipAge;
   canInvite: boolean;
   initialSelectedId: string | null;
   initialCapsuleId: string | null;
   initialMomentId: string | null;
+  initialMoonId: string | null;
   today: string;
   checkins: CheckinRow[];
   sky: CoupleSky;
@@ -151,11 +160,13 @@ export function UniverseView({
   memories,
   capsules,
   moments,
+  milestones,
   age,
   canInvite,
   initialSelectedId,
   initialCapsuleId,
   initialMomentId,
+  initialMoonId,
   today,
   checkins,
   sky,
@@ -167,7 +178,9 @@ export function UniverseView({
       ? { kind: "capsule", id: initialCapsuleId }
       : initialMomentId
         ? { kind: "moment", id: initialMomentId }
-        : null;
+        : initialMoonId
+          ? { kind: "moon", id: initialMoonId }
+          : null;
   const [selected, setSelected] = useState<Selection>(initialSelection);
   const [seenSelection, setSeenSelection] = useState(initialSelection?.id ?? null);
   const [bornId, setBornId] = useState<string | null>(initialSelection?.id ?? null);
@@ -187,6 +200,7 @@ export function UniverseView({
       ...memories.map((memory) => memory.id),
       ...capsules.map((capsule) => capsule.id),
       ...moments.filter((moment) => moment.status === "complete").map((moment) => moment.id),
+      ...milestones.filter((milestone) => milestone.kind === "anniversary").map((milestone) => milestone.id),
     ];
     if (knownIds.current) {
       const fresh = ids.find((id) => !knownIds.current?.has(id));
@@ -196,7 +210,7 @@ export function UniverseView({
       }
     }
     knownIds.current = new Set(ids);
-  }, [memories, capsules, moments]);
+  }, [memories, capsules, moments, milestones]);
 
   useEffect(() => {
     if (!bornId) return;
@@ -253,6 +267,11 @@ export function UniverseView({
         { event: "*", schema: "public", table: "same_moment_submissions", filter: `couple_id=eq.${coupleId}` },
         () => router.refresh(),
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "milestones", filter: `couple_id=eq.${coupleId}` },
+        () => router.refresh(),
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
@@ -268,6 +287,9 @@ export function UniverseView({
   const selectedMoment = selected?.kind === "moment"
     ? moments.find((moment) => moment.id === selected.id) ?? null
     : null;
+  const selectedMilestone = selected?.kind === "moon"
+    ? milestones.find((milestone) => milestone.id === selected.id) ?? null
+    : null;
   const isAnniversary = age.nextAnniversary?.daysAway === 0;
 
   const closeDetail = () => {
@@ -276,6 +298,7 @@ export function UniverseView({
       window.location.search.includes("star=")
       || window.location.search.includes("capsule=")
       || window.location.search.includes("moment=")
+      || window.location.search.includes("moon=")
     ) {
       window.history.replaceState(null, "", "/universe");
     }
@@ -323,6 +346,19 @@ export function UniverseView({
       visualSeed: twin.visualSeed,
     })),
   );
+  const sceneMoons: SceneMoon[] = milestones
+    .filter((milestone) => milestone.kind === "anniversary" && milestone.moon)
+    .map((milestone) => ({
+      milestoneId: milestone.id,
+      title: milestone.title,
+      number: Number(milestone.key),
+      positionX: milestone.moon!.positionX,
+      positionY: milestone.moon!.positionY,
+      positionZ: milestone.moon!.positionZ,
+      scale: milestone.moon!.scale,
+      rotation: milestone.moon!.rotation,
+      visualSeed: milestone.moon!.visualSeed,
+    }));
 
   return (
     <div className="universe-shell">
@@ -333,6 +369,7 @@ export function UniverseView({
             stars={sceneStars}
             capsules={sceneCapsules}
             twins={sceneTwins}
+            moons={sceneMoons}
             selectedId={selected?.id ?? null}
             onSelect={setSelected}
             sky={sky}
@@ -371,6 +408,11 @@ export function UniverseView({
             moments={moments}
             selectedId={selected?.kind === "moment" ? selected.id : null}
             onSelect={(id) => setSelected(id ? { kind: "moment", id } : null)}
+          />
+          <MilestonesPanel
+            milestones={milestones}
+            selectedId={selected?.kind === "moon" ? selected.id : null}
+            onSelect={(id) => setSelected(id ? { kind: "moon", id } : null)}
           />
         </div>
       </div>
@@ -445,7 +487,40 @@ export function UniverseView({
       {selectedMemory && <MemoryDialog memory={selectedMemory} onClose={closeDetail} />}
       {selectedCapsule && <CapsuleDialog capsule={selectedCapsule} onClose={closeDetail} />}
       {selectedMoment && <SameMomentDialog moment={selectedMoment} onClose={closeDetail} />}
+      {selectedMilestone && <MoonDialog milestone={selectedMilestone} onClose={closeDetail} />}
     </div>
+  );
+}
+
+function MoonDialog({
+  milestone,
+  onClose,
+}: {
+  milestone: UniverseMilestone;
+  onClose: () => void;
+}) {
+  const copy =
+    milestone.kind === "anniversary"
+      ? `A moon for year ${milestone.key} together. It stays in your sky.`
+      : `${milestone.key} days written into your shared history.`;
+  return (
+    <dialog className="memory-dialog" open onClose={onClose} onClick={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      <div className="memory-dialog-body">
+        <div className="memory-dialog-head">
+          <span className={`milestones-mark is-${milestone.kind} moon-dialog-mark`} aria-hidden="true" />
+          <h2>{milestone.title}</h2>
+        </div>
+        <p className="memory-dialog-meta">Reached {formatDate(milestone.reachedOn)}</p>
+        <p className="memory-dialog-description">{copy}</p>
+        <div className="memory-dialog-actions">
+          <button type="button" className="primary-button" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </dialog>
   );
 }
 
