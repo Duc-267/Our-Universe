@@ -4,6 +4,7 @@ import { UniverseView, type UniverseCapsule, type UniverseMemory } from "@/compo
 import type { UniverseMilestone } from "@/components/milestones-panel";
 import type { QuestRow } from "@/components/quest-panel";
 import type { SameMomentRow } from "@/components/same-moment-panel";
+import type { TripRow } from "@/components/trip-panel";
 import { todayInZone, computeRelationshipAge } from "@/features/couple/age";
 import { skyFromMoods } from "@/features/checkin/weather";
 import type { QuestResponseType, QuestRewardKind } from "@/features/quest/catalog";
@@ -34,7 +35,14 @@ function milestoneTitle(kind: string, key: string): string {
 export default async function UniversePage({
   searchParams,
 }: {
-  searchParams: Promise<{ star?: string; capsule?: string; moment?: string; moon?: string; quest?: string }>;
+  searchParams: Promise<{
+    star?: string;
+    capsule?: string;
+    moment?: string;
+    moon?: string;
+    quest?: string;
+    trip?: string;
+  }>;
 }) {
   const { supabase, userId } = await requireUser();
   const coupleId = await currentCoupleId(supabase, userId);
@@ -44,7 +52,7 @@ export default async function UniversePage({
   await supabase.rpc("refresh_milestones");
   await supabase.rpc("refresh_quests");
 
-  const [couple, settings, members, memories, photos, objects, capsules, contents, checkins, moments, submissions, milestones, quests, questSubmissions] =
+  const [couple, settings, members, memories, photos, objects, capsules, contents, checkins, moments, submissions, milestones, quests, questSubmissions, trips, tripMemories] =
     await Promise.all([
       supabase
         .from("couples")
@@ -69,10 +77,10 @@ export default async function UniversePage({
       supabase
         .from("cosmic_objects")
         .select(
-          "memory_id, capsule_id, same_moment_id, milestone_id, quest_id, twin_slot, object_type, position_x, position_y, position_z, scale, brightness, rotation, visual_seed",
+          "memory_id, capsule_id, same_moment_id, milestone_id, quest_id, trip_id, twin_slot, object_type, position_x, position_y, position_z, scale, brightness, rotation, visual_seed",
         )
         .eq("couple_id", coupleId)
-        .in("object_type", ["STAR", "BRIGHT_STAR", "COMET", "TWIN_STAR", "MOON", "QUEST_REWARD"]),
+        .in("object_type", ["STAR", "BRIGHT_STAR", "COMET", "TWIN_STAR", "MOON", "QUEST_REWARD", "PLANET"]),
       supabase
         .from("capsules")
         .select("id, creator_user_id, unlock_date, unlock_at, opened_at, created_at")
@@ -122,6 +130,17 @@ export default async function UniversePage({
         )
         .eq("couple_id", coupleId)
         .order("created_at", { ascending: true }),
+      supabase
+        .from("trips")
+        .select(
+          "id, destination, start_date, end_date, note, significant, created_by, created_at",
+        )
+        .eq("couple_id", coupleId)
+        .order("start_date", { ascending: false }),
+      supabase
+        .from("trip_memories")
+        .select("trip_id, memory_id")
+        .eq("couple_id", coupleId),
     ]);
   if (
     couple.error ||
@@ -137,7 +156,9 @@ export default async function UniversePage({
     submissions.error ||
     milestones.error ||
     quests.error ||
-    questSubmissions.error
+    questSubmissions.error ||
+    trips.error ||
+    tripMemories.error
   ) {
     throw new Error("Could not load your universe.");
   }
@@ -188,6 +209,21 @@ export default async function UniversePage({
       .filter((object) => object.object_type === "QUEST_REWARD" && object.quest_id)
       .map((object) => [
         object.quest_id as string,
+        {
+          positionX: object.position_x,
+          positionY: object.position_y,
+          positionZ: object.position_z,
+          scale: object.scale,
+          rotation: object.rotation,
+          visualSeed: object.visual_seed,
+        },
+      ]),
+  );
+  const planetByTrip = new Map(
+    objects.data
+      .filter((object) => object.object_type === "PLANET" && object.trip_id)
+      .map((object) => [
+        object.trip_id as string,
         {
           positionX: object.position_x,
           positionY: object.position_y,
@@ -365,13 +401,43 @@ export default async function UniversePage({
     };
   });
 
+  const memoriesByTrip = new Map<string, string[]>();
+  for (const link of tripMemories.data) {
+    const list = memoriesByTrip.get(link.trip_id) ?? [];
+    list.push(link.memory_id);
+    memoriesByTrip.set(link.trip_id, list);
+  }
+  const memoryLookup = new Map(universeMemories.map((memory) => [memory.id, memory]));
+
+  const universeTrips: TripRow[] = trips.data.map((trip) => ({
+    id: trip.id,
+    destination: trip.destination,
+    startDate: trip.start_date,
+    endDate: trip.end_date,
+    note: trip.note,
+    significant: trip.significant,
+    createdByName:
+      nameByUser.get(trip.created_by) ||
+      (trip.created_by === userId ? "You" : "Your partner"),
+    memories: (memoriesByTrip.get(trip.id) ?? [])
+      .map((memoryId) => memoryLookup.get(memoryId))
+      .filter((memory): memory is UniverseMemory => Boolean(memory))
+      .map((memory) => ({
+        id: memory.id,
+        title: memory.title,
+        memoryDate: memory.memoryDate,
+        thumbUrl: memory.photos[0]?.thumbUrl ?? null,
+      })),
+    planet: planetByTrip.get(trip.id) ?? null,
+  }));
+
   const today = todayInZone(settings.data.timezone);
   const todaysMoods = checkins.data
     .filter((row) => row.local_date === today)
     .map((row) => row.mood);
   const age = computeRelationshipAge(couple.data.relationship_start_date, settings.data.timezone);
   const canInvite = couple.data.created_by === userId && members.data.length < 2;
-  const { star, capsule, moment, moon, quest } = await searchParams;
+  const { star, capsule, moment, moon, quest, trip } = await searchParams;
 
   return (
     <main className="universe-page">
@@ -384,6 +450,7 @@ export default async function UniversePage({
         moments={universeMoments}
         milestones={universeMilestones}
         quests={universeQuests}
+        trips={universeTrips}
         age={age}
         canInvite={canInvite}
         initialSelectedId={star ?? null}
@@ -391,6 +458,7 @@ export default async function UniversePage({
         initialMomentId={moment ?? null}
         initialMoonId={moon ?? null}
         initialQuestId={quest ?? null}
+        initialTripId={trip ?? null}
         today={today}
         sky={skyFromMoods(todaysMoods)}
         checkins={checkins.data.map((row) => ({

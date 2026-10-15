@@ -8,6 +8,7 @@ import { CheckInPanel, type CheckinRow } from "@/components/check-in-panel";
 import { MilestonesPanel, type UniverseMilestone } from "@/components/milestones-panel";
 import { QuestDialog, QuestPanel, type QuestRow } from "@/components/quest-panel";
 import { SameMomentDialog, SameMomentPanel, type SameMomentRow } from "@/components/same-moment-panel";
+import { TripDialog, TripPanel, type TripRow } from "@/components/trip-panel";
 import type { RelationshipAge } from "@/features/couple/age";
 import type { CoupleSky } from "@/features/checkin/weather";
 import { deleteCapsule, openCapsule } from "@/features/capsule/actions";
@@ -19,6 +20,7 @@ import {
   UniverseScene,
   type SceneCapsule,
   type SceneMoon,
+  type ScenePlanet,
   type SceneReward,
   type SceneStar,
   type SceneTwin,
@@ -68,7 +70,7 @@ export type UniverseCapsule = {
   } | null;
 };
 
-type Selection = { kind: "star" | "capsule" | "moment" | "moon" | "quest"; id: string } | null;
+type Selection = { kind: "star" | "capsule" | "moment" | "moon" | "quest" | "trip"; id: string } | null;
 
 type Props = {
   coupleId: string;
@@ -78,6 +80,7 @@ type Props = {
   moments: SameMomentRow[];
   milestones: UniverseMilestone[];
   quests: QuestRow[];
+  trips: TripRow[];
   age: RelationshipAge;
   canInvite: boolean;
   initialSelectedId: string | null;
@@ -85,6 +88,7 @@ type Props = {
   initialMomentId: string | null;
   initialMoonId: string | null;
   initialQuestId: string | null;
+  initialTripId: string | null;
   today: string;
   checkins: CheckinRow[];
   sky: CoupleSky;
@@ -166,6 +170,7 @@ export function UniverseView({
   moments,
   milestones,
   quests,
+  trips,
   age,
   canInvite,
   initialSelectedId,
@@ -173,6 +178,7 @@ export function UniverseView({
   initialMomentId,
   initialMoonId,
   initialQuestId,
+  initialTripId,
   today,
   checkins,
   sky,
@@ -188,7 +194,9 @@ export function UniverseView({
           ? { kind: "moon", id: initialMoonId }
           : initialQuestId
             ? { kind: "quest", id: initialQuestId }
-            : null;
+            : initialTripId
+              ? { kind: "trip", id: initialTripId }
+              : null;
   const [selected, setSelected] = useState<Selection>(initialSelection);
   const [seenSelection, setSeenSelection] = useState(initialSelection?.id ?? null);
   const [bornId, setBornId] = useState<string | null>(initialSelection?.id ?? null);
@@ -210,6 +218,7 @@ export function UniverseView({
       ...moments.filter((moment) => moment.status === "complete").map((moment) => moment.id),
       ...milestones.filter((milestone) => milestone.kind === "anniversary").map((milestone) => milestone.id),
       ...quests.filter((quest) => quest.status === "complete").map((quest) => quest.id),
+      ...trips.filter((trip) => trip.significant).map((trip) => trip.id),
     ];
     if (knownIds.current) {
       const fresh = ids.find((id) => !knownIds.current?.has(id));
@@ -219,7 +228,7 @@ export function UniverseView({
       }
     }
     knownIds.current = new Set(ids);
-  }, [memories, capsules, moments, milestones, quests]);
+  }, [memories, capsules, moments, milestones, quests, trips]);
 
   useEffect(() => {
     if (!bornId) return;
@@ -291,6 +300,16 @@ export function UniverseView({
         { event: "*", schema: "public", table: "quest_submissions", filter: `couple_id=eq.${coupleId}` },
         () => router.refresh(),
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "trips", filter: `couple_id=eq.${coupleId}` },
+        () => router.refresh(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "trip_memories", filter: `couple_id=eq.${coupleId}` },
+        () => router.refresh(),
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
@@ -312,6 +331,9 @@ export function UniverseView({
   const selectedQuest = selected?.kind === "quest"
     ? quests.find((quest) => quest.id === selected.id) ?? null
     : null;
+  const selectedTrip = selected?.kind === "trip"
+    ? trips.find((trip) => trip.id === selected.id) ?? null
+    : null;
   const isAnniversary = age.nextAnniversary?.daysAway === 0;
 
   const closeDetail = () => {
@@ -322,6 +344,7 @@ export function UniverseView({
       || window.location.search.includes("moment=")
       || window.location.search.includes("moon=")
       || window.location.search.includes("quest=")
+      || window.location.search.includes("trip=")
     ) {
       window.history.replaceState(null, "", "/universe");
     }
@@ -395,6 +418,18 @@ export function UniverseView({
       rotation: quest.reward!.rotation,
       visualSeed: quest.reward!.visualSeed,
     }));
+  const scenePlanets: ScenePlanet[] = trips
+    .filter((trip) => trip.planet)
+    .map((trip) => ({
+      tripId: trip.id,
+      title: trip.destination,
+      positionX: trip.planet!.positionX,
+      positionY: trip.planet!.positionY,
+      positionZ: trip.planet!.positionZ,
+      scale: trip.planet!.scale,
+      rotation: trip.planet!.rotation,
+      visualSeed: trip.planet!.visualSeed,
+    }));
 
   return (
     <div className="universe-shell">
@@ -407,6 +442,7 @@ export function UniverseView({
             twins={sceneTwins}
             moons={sceneMoons}
             rewards={sceneRewards}
+            planets={scenePlanets}
             selectedId={selected?.id ?? null}
             onSelect={setSelected}
             sky={sky}
@@ -422,6 +458,7 @@ export function UniverseView({
               <span aria-hidden="true">✦</span> Add a memory
             </Link>
             <Link className="universe-seal" href="/capsule/new">Seal a capsule</Link>
+            <Link className="universe-seal" href="/trip/new">Add a trip</Link>
           </div>
           {memories.length === 0 && capsules.length === 0 && (
             <section className="universe-empty-overlay" aria-labelledby="universe-title">
@@ -452,6 +489,11 @@ export function UniverseView({
             quests={quests}
             selectedId={selected?.kind === "quest" ? selected.id : null}
             onSelect={(id) => setSelected(id ? { kind: "quest", id } : null)}
+          />
+          <TripPanel
+            trips={trips}
+            selectedId={selected?.kind === "trip" ? selected.id : null}
+            onSelect={(id) => setSelected(id ? { kind: "trip", id } : null)}
           />
           <MilestonesPanel
             milestones={milestones}
@@ -533,6 +575,17 @@ export function UniverseView({
       {selectedMoment && <SameMomentDialog moment={selectedMoment} onClose={closeDetail} />}
       {selectedMilestone && <MoonDialog milestone={selectedMilestone} onClose={closeDetail} />}
       {selectedQuest && <QuestDialog quest={selectedQuest} onClose={closeDetail} />}
+      {selectedTrip && (
+        <TripDialog
+          trip={selectedTrip}
+          availableMemories={memories.map((memory) => ({
+            id: memory.id,
+            title: memory.title,
+            memoryDate: memory.memoryDate,
+          }))}
+          onClose={closeDetail}
+        />
+      )}
     </div>
   );
 }
