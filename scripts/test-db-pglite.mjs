@@ -39,6 +39,7 @@ try {
   await database.exec(readFileSync("supabase/migrations/20261015120000_phase3_moons_milestones.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261015200000_phase3_quests.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261015210000_phase3_trips.sql", "utf8"));
+  await database.exec(readFileSync("supabase/migrations/20261015220000_phase3_constellations.sql", "utf8"));
   await query("insert into public.profiles (id, display_name) select id, raw_user_meta_data ->> 'display_name' from auth.users");
   await query(
     "insert into auth.users(id, raw_user_meta_data) values ($1, $2::jsonb)",
@@ -500,6 +501,64 @@ try {
       "select count(*)::int as n from public.cosmic_objects where trip_id = $1",
       [tripId],
     ))[0].n,
+    0,
+  );
+
+  await asUser(userIds.alex);
+  const [{ create_memory: constellationA }] = await query(
+    "select public.create_memory($1, $2, $3::date, $4, $5, $6, $7)",
+    [coupleA, "Midnight snack run", "2025-06-01", null, null, "everyday", 4],
+  );
+  const [{ create_memory: constellationB }] = await query(
+    "select public.create_memory($1, $2, $3::date, $4, $5, $6, $7)",
+    [coupleA, "Late call one", "2025-06-02", null, null, "everyday", 5],
+  );
+  const [{ create_memory: constellationC }] = await query(
+    "select public.create_memory($1, $2, $3::date, $4, $5, $6, $7)",
+    [coupleA, "Late call two", "2025-06-03", null, null, "everyday", 5],
+  );
+  await rejected(
+    () =>
+      query("select public.create_constellation($1, null, array[$2]::uuid[])", [
+        "Too few",
+        constellationA,
+      ]),
+    "constellation needs two memories",
+  );
+  const [{ create_constellation: constellationId }] = await query(
+    "select public.create_constellation($1, $2, array[$3, $4, $5]::uuid[])",
+    ["Late Night Calls", "Whispers", constellationA, constellationB, constellationC],
+  );
+  assert.equal(
+    (await query(
+      "select count(*)::int as n from public.constellation_members where constellation_id = $1",
+      [constellationId],
+    ))[0].n,
+    3,
+  );
+  await query(
+    "select public.update_constellation($1, $2, null, array[$3, $4]::uuid[])",
+    [constellationId, "Night Calls", constellationA, constellationB],
+  );
+  assert.equal(
+    (await query(
+      "select count(*)::int as n from public.constellation_members where constellation_id = $1",
+      [constellationId],
+    ))[0].n,
+    2,
+  );
+  await asUser(userIds.casey);
+  assert.equal(
+    (await query(
+      "select count(*)::int as n from public.constellations where couple_id = $1",
+      [coupleA],
+    ))[0].n,
+    0,
+  );
+  await asUser(userIds.alex);
+  await query("select public.delete_constellation($1)", [constellationId]);
+  assert.equal(
+    (await query("select count(*)::int as n from public.constellations where id = $1", [constellationId]))[0].n,
     0,
   );
 
