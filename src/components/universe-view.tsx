@@ -15,6 +15,7 @@ import {
   type ConstellationRow,
 } from "@/components/constellation-panel";
 import { CosmicEventsPanel, cosmicEventLabel, type CosmicEventRow } from "@/components/cosmic-events-panel";
+import { DreamDialog, DreamPanel, type DreamRow } from "@/components/dream-panel";
 import type { RelationshipAge } from "@/features/couple/age";
 import type { CoupleSky } from "@/features/checkin/weather";
 import { deleteCapsule, openCapsule } from "@/features/capsule/actions";
@@ -28,6 +29,7 @@ import {
   type SceneConstellation,
   type SceneMoon,
   type ScenePlanet,
+  type SceneDream,
   type SceneReward,
   type SceneStar,
   type SceneTwin,
@@ -79,7 +81,7 @@ export type UniverseCapsule = {
 };
 
 type Selection =
-  | { kind: "star" | "capsule" | "moment" | "moon" | "quest" | "trip" | "constellation"; id: string }
+  | { kind: "star" | "capsule" | "moment" | "moon" | "quest" | "trip" | "constellation" | "dream"; id: string }
   | null;
 
 type Props = {
@@ -91,6 +93,7 @@ type Props = {
   milestones: UniverseMilestone[];
   quests: QuestRow[];
   trips: TripRow[];
+  dreams: DreamRow[];
   constellations: ConstellationRow[];
   cosmicEvents: CosmicEventRow[];
   skyEvent: CosmicEventRow["kind"] | null;
@@ -102,6 +105,7 @@ type Props = {
   initialMoonId: string | null;
   initialQuestId: string | null;
   initialTripId: string | null;
+  initialDreamId: string | null;
   initialConstellationId: string | null;
   today: string;
   checkins: CheckinRow[];
@@ -185,6 +189,7 @@ export function UniverseView({
   milestones,
   quests,
   trips,
+  dreams,
   constellations,
   cosmicEvents,
   skyEvent,
@@ -196,6 +201,7 @@ export function UniverseView({
   initialMoonId,
   initialQuestId,
   initialTripId,
+  initialDreamId,
   initialConstellationId,
   today,
   checkins,
@@ -214,7 +220,9 @@ export function UniverseView({
             ? { kind: "quest", id: initialQuestId }
             : initialTripId
               ? { kind: "trip", id: initialTripId }
-              : initialConstellationId
+              : initialDreamId
+                ? { kind: "dream", id: initialDreamId }
+                : initialConstellationId
                 ? { kind: "constellation", id: initialConstellationId }
                 : null;
   const [selected, setSelected] = useState<Selection>(initialSelection);
@@ -350,6 +358,11 @@ export function UniverseView({
         { event: "*", schema: "public", table: "cosmic_events", filter: `couple_id=eq.${coupleId}` },
         () => router.refresh(),
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "future_dreams", filter: `couple_id=eq.${coupleId}` },
+        () => router.refresh(),
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
@@ -374,6 +387,9 @@ export function UniverseView({
   const selectedTrip = selected?.kind === "trip"
     ? trips.find((trip) => trip.id === selected.id) ?? null
     : null;
+  const selectedDream = selected?.kind === "dream"
+    ? dreams.find((dream) => dream.id === selected.id) ?? null
+    : null;
   const selectedConstellation = selected?.kind === "constellation"
     ? constellations.find((row) => row.id === selected.id) ?? null
     : null;
@@ -388,6 +404,7 @@ export function UniverseView({
       || window.location.search.includes("moon=")
       || window.location.search.includes("quest=")
       || window.location.search.includes("trip=")
+      || window.location.search.includes("dream=")
       || window.location.search.includes("constellation=")
     ) {
       window.history.replaceState(null, "", "/universe");
@@ -475,6 +492,18 @@ export function UniverseView({
       rotation: trip.planet!.rotation,
       visualSeed: trip.planet!.visualSeed,
     }));
+  const sceneDreams: SceneDream[] = dreams
+    .filter((dream) => dream.distant)
+    .map((dream) => ({
+      dreamId: dream.id,
+      title: dream.title,
+      positionX: dream.distant!.positionX,
+      positionY: dream.distant!.positionY,
+      positionZ: dream.distant!.positionZ,
+      scale: dream.distant!.scale,
+      rotation: dream.distant!.rotation,
+      visualSeed: dream.distant!.visualSeed,
+    }));
   const sceneConstellations: SceneConstellation[] = constellations.map((row) => ({
     id: row.id,
     name: row.name,
@@ -493,6 +522,7 @@ export function UniverseView({
             moons={sceneMoons}
             rewards={sceneRewards}
             planets={scenePlanets}
+            dreams={sceneDreams}
             constellations={sceneConstellations}
             selectedId={selected?.id ?? null}
             onSelect={setSelected}
@@ -552,6 +582,11 @@ export function UniverseView({
             trips={trips}
             selectedId={selected?.kind === "trip" ? selected.id : null}
             onSelect={(id) => setSelected(id ? { kind: "trip", id } : null)}
+          />
+          <DreamPanel
+            dreams={dreams}
+            selectedId={selected?.kind === "dream" ? selected.id : null}
+            onSelect={(id) => setSelected(id ? { kind: "dream", id } : null)}
           />
           <ConstellationPanel
             constellations={constellations}
@@ -649,6 +684,13 @@ export function UniverseView({
             memoryDate: memory.memoryDate,
           }))}
           onClose={closeDetail}
+        />
+      )}
+      {selectedDream && (
+        <DreamDialog
+          dream={selectedDream}
+          onClose={closeDetail}
+          onOpenMemory={(memoryId) => setSelected({ kind: "star", id: memoryId })}
         />
       )}
       {selectedConstellation && (

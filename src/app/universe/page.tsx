@@ -7,6 +7,7 @@ import type { SameMomentRow } from "@/components/same-moment-panel";
 import type { TripRow } from "@/components/trip-panel";
 import type { ConstellationRow } from "@/components/constellation-panel";
 import type { CosmicEventRow } from "@/components/cosmic-events-panel";
+import type { DreamRow } from "@/components/dream-panel";
 import { todayInZone, computeRelationshipAge } from "@/features/couple/age";
 import { skyFromMoods } from "@/features/checkin/weather";
 import type { QuestResponseType, QuestRewardKind } from "@/features/quest/catalog";
@@ -44,6 +45,7 @@ export default async function UniversePage({
     moon?: string;
     quest?: string;
     trip?: string;
+    dream?: string;
     constellation?: string;
   }>;
 }) {
@@ -57,7 +59,7 @@ export default async function UniversePage({
   await supabase.rpc("refresh_memory_gravity");
   await supabase.rpc("refresh_cosmic_events");
 
-  const [couple, settings, members, memories, photos, objects, capsules, contents, checkins, moments, submissions, milestones, quests, questSubmissions, trips, tripMemories, constellations, constellationMembers, cosmicEvents] =
+  const [couple, settings, members, memories, photos, objects, capsules, contents, checkins, moments, submissions, milestones, quests, questSubmissions, trips, tripMemories, constellations, constellationMembers, cosmicEvents, dreams] =
     await Promise.all([
       supabase
         .from("couples")
@@ -82,10 +84,10 @@ export default async function UniversePage({
       supabase
         .from("cosmic_objects")
         .select(
-          "memory_id, capsule_id, same_moment_id, milestone_id, quest_id, trip_id, twin_slot, object_type, position_x, position_y, position_z, scale, brightness, gravity, rotation, visual_seed",
+          "memory_id, capsule_id, same_moment_id, milestone_id, quest_id, trip_id, dream_id, twin_slot, object_type, position_x, position_y, position_z, scale, brightness, gravity, rotation, visual_seed",
         )
         .eq("couple_id", coupleId)
-        .in("object_type", ["STAR", "BRIGHT_STAR", "COMET", "TWIN_STAR", "MOON", "QUEST_REWARD", "PLANET"]),
+        .in("object_type", ["STAR", "BRIGHT_STAR", "COMET", "TWIN_STAR", "MOON", "QUEST_REWARD", "PLANET", "DISTANT_OBJECT"]),
       supabase
         .from("capsules")
         .select("id, creator_user_id, unlock_date, unlock_at, opened_at, created_at")
@@ -160,6 +162,11 @@ export default async function UniversePage({
         .select("id, kind, event_date, milestone_id")
         .eq("couple_id", coupleId)
         .order("event_date", { ascending: false }),
+      supabase
+        .from("future_dreams")
+        .select("id, title, description, target_date, category, status, created_by, memory_id, created_at")
+        .eq("couple_id", coupleId)
+        .order("created_at", { ascending: false }),
     ]);
   if (
     couple.error ||
@@ -180,7 +187,8 @@ export default async function UniversePage({
     tripMemories.error ||
     constellations.error ||
     constellationMembers.error ||
-    cosmicEvents.error
+    cosmicEvents.error ||
+    dreams.error
   ) {
     throw new Error("Could not load your universe.");
   }
@@ -454,6 +462,40 @@ export default async function UniversePage({
     planet: planetByTrip.get(trip.id) ?? null,
   }));
 
+  const distantByDream = new Map(
+    objects.data
+      .filter((object) => object.object_type === "DISTANT_OBJECT" && object.dream_id)
+      .map((object) => [
+        object.dream_id as string,
+        {
+          positionX: object.position_x,
+          positionY: object.position_y,
+          positionZ: object.position_z,
+          scale: object.scale,
+          rotation: object.rotation,
+          visualSeed: object.visual_seed,
+        },
+      ]),
+  );
+  const universeDreams: DreamRow[] = dreams.data.flatMap((dream) => {
+    if (dream.status !== "dream" && dream.status !== "planned" && dream.status !== "completed") {
+      return [];
+    }
+    return [{
+      id: dream.id,
+      title: dream.title,
+      description: dream.description,
+      targetDate: dream.target_date,
+      category: dream.category,
+      status: dream.status,
+      createdByName:
+        nameByUser.get(dream.created_by) ||
+        (dream.created_by === userId ? "You" : "Your partner"),
+      memoryId: dream.memory_id,
+      distant: distantByDream.get(dream.id) ?? null,
+    }];
+  });
+
   const memoriesByConstellation = new Map<string, string[]>();
   for (const link of constellationMembers.data) {
     const list = memoriesByConstellation.get(link.constellation_id) ?? [];
@@ -499,7 +541,7 @@ export default async function UniversePage({
     .map((row) => row.mood);
   const age = computeRelationshipAge(couple.data.relationship_start_date, settings.data.timezone);
   const canInvite = couple.data.created_by === userId && members.data.length < 2;
-  const { star, capsule, moment, moon, quest, trip, constellation } = await searchParams;
+  const { star, capsule, moment, moon, quest, trip, dream, constellation } = await searchParams;
 
   return (
     <main className="universe-page">
@@ -513,6 +555,7 @@ export default async function UniversePage({
         milestones={universeMilestones}
         quests={universeQuests}
         trips={universeTrips}
+        dreams={universeDreams}
         constellations={universeConstellations}
         cosmicEvents={universeEvents}
         skyEvent={skyEvent}
@@ -524,6 +567,7 @@ export default async function UniversePage({
         initialMoonId={moon ?? null}
         initialQuestId={quest ?? null}
         initialTripId={trip ?? null}
+        initialDreamId={dream ?? null}
         initialConstellationId={constellation ?? null}
         today={today}
         sky={skyFromMoods(todaysMoods)}
