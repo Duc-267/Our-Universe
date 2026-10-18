@@ -22,12 +22,12 @@ select test.assert_true(
    where milestone.couple_id = :'couple_a' and milestone.kind = 'anniversary'),
   'anniversaries become an aurora');
 select test.assert_true(
-  (select kind = 'meteor_shower' from public.cosmic_events event
+  (select event.kind = 'meteor_shower' from public.cosmic_events event
    join public.milestones milestone on milestone.id = event.milestone_id
    where milestone.couple_id = :'couple_a' and milestone.kind = 'days' and milestone.key = '100'),
   '100 days becomes a meteor shower');
 select test.assert_true(
-  (select kind = 'planet_bloom' from public.cosmic_events event
+  (select event.kind = 'planet_bloom' from public.cosmic_events event
    join public.milestones milestone on milestone.id = event.milestone_id
    where milestone.couple_id = :'couple_a' and milestone.kind = 'days' and milestone.key = '365'),
   '365 days becomes a planet bloom');
