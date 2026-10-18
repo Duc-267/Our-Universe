@@ -40,6 +40,7 @@ try {
   await database.exec(readFileSync("supabase/migrations/20261015200000_phase3_quests.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261015210000_phase3_trips.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261015220000_phase3_constellations.sql", "utf8"));
+  await database.exec(readFileSync("supabase/migrations/20261015230000_phase3_memory_gravity.sql", "utf8"));
   await query("insert into public.profiles (id, display_name) select id, raw_user_meta_data ->> 'display_name' from auth.users");
   await query(
     "insert into auth.users(id, raw_user_meta_data) values ($1, $2::jsonb)",
@@ -560,6 +561,71 @@ try {
   assert.equal(
     (await query("select count(*)::int as n from public.constellations where id = $1", [constellationId]))[0].n,
     0,
+  );
+
+  await asUser(userIds.alex);
+  const [{ create_memory: gravityLow }] = await query(
+    "select public.create_memory($1, $2, $3::date, $4, $5, $6, $7)",
+    [coupleA, "Quiet morning", "2025-07-01", "Tea on the balcony", null, "everyday", 4],
+  );
+  const [{ create_memory: gravityHigh }] = await query(
+    "select public.create_memory($1, $2, $3::date, $4, $5, $6, $7)",
+    [coupleA, "The proposal", "2025-07-02", null, null, "special", 9],
+  );
+  const beforeGravity = (
+    await query(
+      "select position_x, position_y, position_z, brightness, title, importance from public.cosmic_objects o join public.memories m on m.id = o.memory_id where o.memory_id = $1",
+      [gravityLow],
+    )
+  )[0];
+  await query("select public.refresh_memory_gravity()");
+  assert.equal(
+    (await query("select gravity from public.cosmic_objects where memory_id = $1", [gravityLow]))[0].gravity,
+    24,
+  );
+  assert.equal(
+    (await query("select gravity from public.cosmic_objects where memory_id = $1", [gravityHigh]))[0].gravity,
+    54,
+  );
+  const afterGravity = (
+    await query(
+      "select position_x, position_y, position_z, brightness, title, importance from public.cosmic_objects o join public.memories m on m.id = o.memory_id where o.memory_id = $1",
+      [gravityLow],
+    )
+  )[0];
+  assert.equal(afterGravity.title, "Quiet morning");
+  assert.equal(afterGravity.importance, 4);
+  assert.equal(afterGravity.position_x, beforeGravity.position_x);
+  assert.equal(afterGravity.position_y, beforeGravity.position_y);
+  assert.equal(afterGravity.position_z, beforeGravity.position_z);
+  assert.equal(afterGravity.brightness, beforeGravity.brightness);
+  await asOwner();
+  await query(
+    `insert into public.memory_photos (id, couple_id, memory_id, uploader_user_id, full_path, thumb_path, width, height)
+     values (gen_random_uuid(), $1, $2, $3, $4, $5, 800, 600)`,
+    [coupleA, gravityLow, userIds.alex, `${coupleA}/gravity/full.webp`, `${coupleA}/gravity/thumb.webp`],
+  );
+  await asUser(userIds.alex);
+  await query("select public.refresh_memory_gravity()");
+  assert.equal(
+    (await query("select gravity from public.cosmic_objects where memory_id = $1", [gravityLow]))[0].gravity,
+    30,
+  );
+  await query(
+    "select public.create_constellation($1, null, array[$2, $3]::uuid[])",
+    ["Quiet and loud", gravityLow, gravityHigh],
+  );
+  await query("select public.refresh_memory_gravity()");
+  assert.equal(
+    (await query("select gravity from public.cosmic_objects where memory_id = $1", [gravityLow]))[0].gravity,
+    36,
+  );
+  await asUser(userIds.casey);
+  await query("select public.refresh_memory_gravity()");
+  await asUser(userIds.alex);
+  assert.equal(
+    (await query("select gravity from public.cosmic_objects where memory_id = $1", [gravityLow]))[0].gravity,
+    36,
   );
 
   await asOwner();

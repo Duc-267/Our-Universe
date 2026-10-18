@@ -51,6 +51,7 @@ export type UniverseMemory = {
     positionZ: number;
     scale: number;
     brightness: number;
+    gravity: number;
     rotation: number;
     visualSeed: number;
   } | null;
@@ -393,6 +394,7 @@ export function UniverseView({
       positionZ: memory.star!.positionZ,
       scale: memory.star!.scale,
       brightness: memory.star!.brightness,
+      gravity: memory.star!.gravity,
       rotation: memory.star!.rotation,
       visualSeed: memory.star!.visualSeed,
       bright: memory.star!.type === "BRIGHT_STAR",
@@ -573,6 +575,7 @@ export function UniverseView({
                     <span className="star-option-title">{memory.title}</span>
                     <span className="star-option-meta">
                       {formatDate(memory.memoryDate)} · {categoryLabel(memory.category)}
+                      {memory.star && memory.star.gravity > 0 ? ` · gravity ${memory.star.gravity}` : ""}
                       {memory.photos.length > 0 ? ` · ${memory.photos.length} ${memory.photos.length === 1 ? "photo" : "photos"}` : ""}
                     </span>
                   </span>
@@ -753,6 +756,9 @@ function MemoryDialog({ memory, onClose }: { memory: UniverseMemory; onClose: ()
         <div className="memory-chip-row">
           <span className="memory-chip">{categoryLabel(memory.category)}</span>
           <span className="memory-chip">Importance {memory.importance}/10</span>
+          {memory.star && memory.star.gravity > 0 && (
+            <span className="memory-chip">Gravity {memory.star.gravity}</span>
+          )}
           {memory.star?.type === "BRIGHT_STAR" && <span className="memory-chip is-bright">Bright star</span>}
           <span className="memory-chip">{memoryIcon(memory.icon).label}</span>
         </div>
