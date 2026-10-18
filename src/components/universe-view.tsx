@@ -15,6 +15,7 @@ import {
   type ConstellationRow,
 } from "@/components/constellation-panel";
 import { CosmicEventsPanel, cosmicEventLabel, type CosmicEventRow } from "@/components/cosmic-events-panel";
+import { ArchivePanel, type ArchiveSummary } from "@/components/archive-panel";
 import { DreamDialog, DreamPanel, type DreamRow } from "@/components/dream-panel";
 import type { RelationshipAge } from "@/features/couple/age";
 import type { CoupleSky } from "@/features/checkin/weather";
@@ -96,6 +97,7 @@ type Props = {
   dreams: DreamRow[];
   constellations: ConstellationRow[];
   cosmicEvents: CosmicEventRow[];
+  archive: ArchiveSummary | null;
   skyEvent: CosmicEventRow["kind"] | null;
   age: RelationshipAge;
   canInvite: boolean;
@@ -192,6 +194,7 @@ export function UniverseView({
   dreams,
   constellations,
   cosmicEvents,
+  archive,
   skyEvent,
   age,
   canInvite,
@@ -361,6 +364,11 @@ export function UniverseView({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "future_dreams", filter: `couple_id=eq.${coupleId}` },
+        () => router.refresh(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "archive_summaries", filter: `couple_id=eq.${coupleId}` },
         () => router.refresh(),
       )
       .subscribe();
@@ -564,6 +572,7 @@ export function UniverseView({
         </div>
         <div className="universe-side">
           <CheckInPanel coupleId={coupleId} today={today} checkins={checkins} />
+          <ArchivePanel archive={archive} />
           <SameMomentPanel
             coupleId={coupleId}
             userId={userId}
