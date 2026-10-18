@@ -55,4 +55,6 @@ supabase db push
 
 `supabase/migrations/20261015230000_phase3_memory_gravity.sql` adds a derived gravity score on memory stars. Apply it with `supabase db push` before expecting gravity on `/universe`.
 
+`supabase/migrations/20261015240000_phase3_cosmic_events.sql` adds one sky event per milestone. Apply it with `supabase db push` before expecting auroras, meteor showers, or planet blooms.
+
 Verified on 2026-10-12: after applying the migration, the Data API already serves all three tables — `GET /rest/v1/<table>` with the publishable key returns the 42501 privilege error for the anon role (table found, denied by design), not the PGRST205 "Could not find the table" error that missing or unexposed tables return. No dashboard exposure step is required; `/universe` reads these tables with the authenticated role.

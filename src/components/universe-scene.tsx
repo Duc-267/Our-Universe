@@ -102,6 +102,7 @@ type Props = {
   selectedId: string | null;
   onSelect: (target: SceneTarget | null) => void;
   sky: CoupleSky;
+  skyEvent: "aurora" | "meteor_shower" | "planet_bloom" | null;
   bornId: string | null;
   cheer: "star" | "checkin" | null;
 };
@@ -230,6 +231,7 @@ export function UniverseScene({
   selectedId,
   onSelect,
   sky,
+  skyEvent,
   bornId,
   cheer,
 }: Props) {
@@ -245,6 +247,7 @@ export function UniverseScene({
   const selectedRef = useRef(selectedId);
   const selectRef = useRef(onSelect);
   const skyRef = useRef(sky);
+  const eventRef = useRef(skyEvent);
   const bornRef = useRef(bornId);
   const cheerRef = useRef(cheer);
   const duckRef = useRef<HTMLDivElement>(null);
@@ -263,6 +266,7 @@ export function UniverseScene({
     selectedRef.current = selectedId;
     selectRef.current = onSelect;
     skyRef.current = sky;
+    eventRef.current = skyEvent;
     bornRef.current = bornId;
     cheerRef.current = cheer;
   });
@@ -1018,6 +1022,54 @@ export function UniverseScene({
       }
     };
 
+    const drawCosmicEvent = (time: number) => {
+      const kind = eventRef.current;
+      if (!kind) return;
+      const reduced = reducedMotion.matches;
+      if (kind === "aurora") {
+        for (let i = 0; i < 5; i += 1) {
+          const drift = reduced ? 0 : Math.sin(time / 1800 + i) * 18;
+          const x = width * (0.12 + i * 0.18) + drift;
+          const band = ctx.createLinearGradient(x, height * 0.05, x, height * 0.72);
+          band.addColorStop(0, "rgba(120, 255, 196, 0)");
+          band.addColorStop(0.45, i % 2 ? "rgba(126, 200, 255, 0.28)" : "rgba(186, 168, 255, 0.24)");
+          band.addColorStop(1, "rgba(120, 255, 196, 0)");
+          ctx.fillStyle = band;
+          ctx.beginPath();
+          ctx.ellipse(x, height * 0.34, 28, height * 0.28, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        return;
+      }
+      if (kind === "meteor_shower") {
+        ctx.save();
+        ctx.strokeStyle = "rgba(255, 246, 230, 0.85)";
+        ctx.lineWidth = 1.6;
+        for (let i = 0; i < 7; i += 1) {
+          const phase = reduced ? 0.35 : (time / 1600 + i * 0.17) % 1;
+          const x = width * (0.15 + ((i * 0.13) % 0.7)) + phase * width * 0.22;
+          const y = height * 0.08 + phase * height * 0.5;
+          ctx.globalAlpha = reduced ? 0.5 : 1 - phase;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x - 36, y - 18);
+          ctx.stroke();
+        }
+        ctx.restore();
+        return;
+      }
+      const center = projectPoint(0, 0, 0, 1, 0);
+      if (!center) return;
+      const pulse = reduced ? 0.55 : (time / 2200) % 1;
+      ctx.save();
+      ctx.strokeStyle = `rgba(255, 196, 120, ${0.55 * (1 - pulse)})`;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, 28 + pulse * Math.min(width, height) * 0.22, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    };
+
     const placeDuck = (time: number) => {
       const node = duckRef.current;
       const motion = duckMotionRef.current;
@@ -1084,6 +1136,7 @@ export function UniverseScene({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
       drawSky(time);
+      drawCosmicEvent(time);
       drawHalo();
       drawOrbit(time, false, centerDepth);
       drawMotes(time, false, centerDepth);

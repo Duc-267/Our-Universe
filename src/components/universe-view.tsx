@@ -14,6 +14,7 @@ import {
   ConstellationPanel,
   type ConstellationRow,
 } from "@/components/constellation-panel";
+import { CosmicEventsPanel, cosmicEventLabel, type CosmicEventRow } from "@/components/cosmic-events-panel";
 import type { RelationshipAge } from "@/features/couple/age";
 import type { CoupleSky } from "@/features/checkin/weather";
 import { deleteCapsule, openCapsule } from "@/features/capsule/actions";
@@ -91,6 +92,8 @@ type Props = {
   quests: QuestRow[];
   trips: TripRow[];
   constellations: ConstellationRow[];
+  cosmicEvents: CosmicEventRow[];
+  skyEvent: CosmicEventRow["kind"] | null;
   age: RelationshipAge;
   canInvite: boolean;
   initialSelectedId: string | null;
@@ -183,6 +186,8 @@ export function UniverseView({
   quests,
   trips,
   constellations,
+  cosmicEvents,
+  skyEvent,
   age,
   canInvite,
   initialSelectedId,
@@ -340,6 +345,11 @@ export function UniverseView({
         },
         () => router.refresh(),
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "cosmic_events", filter: `couple_id=eq.${coupleId}` },
+        () => router.refresh(),
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
@@ -487,6 +497,7 @@ export function UniverseView({
             selectedId={selected?.id ?? null}
             onSelect={setSelected}
             sky={sky}
+            skyEvent={skyEvent}
             bornId={bornId}
             cheer={cheer}
           />
@@ -502,6 +513,11 @@ export function UniverseView({
             <Link className="universe-seal" href="/trip/new">Add a trip</Link>
             <Link className="universe-seal" href="/constellation/new">Group stars</Link>
           </div>
+          {skyEvent && (
+            <p className="cosmic-event-banner">
+              {cosmicEventLabel(skyEvent)} in the sky today
+            </p>
+          )}
           {memories.length === 0 && capsules.length === 0 && (
             <section className="universe-empty-overlay" aria-labelledby="universe-title">
               <div className="universe-empty-card">
@@ -547,6 +563,7 @@ export function UniverseView({
             selectedId={selected?.kind === "moon" ? selected.id : null}
             onSelect={(id) => setSelected(id ? { kind: "moon", id } : null)}
           />
+          <CosmicEventsPanel events={cosmicEvents} />
         </div>
       </div>
       {memories.length > 0 && (

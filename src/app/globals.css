@@ -306,6 +306,18 @@ button:disabled { cursor: wait; opacity: 0.65; }
 .trip-linked-memories li { display: flex; align-items: center; gap: 0.7rem; }
 .trip-linked-memories img { width: 3rem; height: 3rem; object-fit: cover; border: 2px solid var(--ink); border-radius: 0.7rem; flex: none; }
 .constellation-name-input { width: 100%; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 800; padding: 0; }
+.cosmic-events-panel, .cosmic-events-card { display: grid; gap: 0.85rem; }
+.cosmic-events-card { padding: 1.1rem 1.15rem; border: 2.5px solid var(--ink); border-radius: 1.4rem; background: var(--surface); box-shadow: 0 5px 0 var(--ink), var(--shadow); }
+.cosmic-events-card h2 { margin: 0; font-size: 1.35rem; }
+.cosmic-events-copy, .cosmic-events-meta { margin: 0; color: var(--muted); font-size: 0.84rem; }
+.cosmic-events-list { display: grid; gap: 0.45rem; margin: 0; padding: 0; list-style: none; max-height: 14rem; overflow: auto; }
+.cosmic-events-item { display: flex; align-items: center; gap: 0.7rem; }
+.cosmic-events-title { display: block; font-weight: 800; }
+.cosmic-events-mark { width: 1.15rem; height: 1.15rem; border-radius: 50%; border: 2px solid var(--ink); flex: none; }
+.cosmic-events-mark.is-aurora { background: linear-gradient(#7dffc4, #baa8ff); }
+.cosmic-events-mark.is-meteor_shower { background: linear-gradient(135deg, #fff6e6, #8fd3ff); }
+.cosmic-events-mark.is-planet_bloom { background: radial-gradient(circle at 30% 30%, #ffd27a, #e07a3d); }
+.cosmic-event-banner { margin: 0.7rem 0 0; padding: 0.45rem 0.8rem; border: 2px solid var(--ink); border-radius: 999px; background: var(--surface); font-weight: 800; width: fit-content; }
 .quest-card { padding: 1.1rem 1.15rem; border: 2.5px solid var(--ink); border-radius: 1.4rem; background: var(--surface); box-shadow: 0 5px 0 var(--ink), var(--shadow); }
 .quest-card h2 { margin: 0; font-size: 1.35rem; }
 .quest-copy, .quest-hint, .quest-window, .quest-waiting { margin: 0; color: var(--muted); font-size: 0.92rem; line-height: 1.45; }
