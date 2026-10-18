@@ -80,6 +80,17 @@ export type ScenePlanet = {
   visualSeed: number;
 };
 
+export type SceneDream = {
+  dreamId: string;
+  title: string;
+  positionX: number;
+  positionY: number;
+  positionZ: number;
+  scale: number;
+  rotation: number;
+  visualSeed: number;
+};
+
 export type SceneConstellation = {
   id: string;
   name: string;
@@ -87,7 +98,7 @@ export type SceneConstellation = {
 };
 
 type SceneTarget = {
-  kind: "star" | "capsule" | "moment" | "moon" | "quest" | "trip" | "constellation";
+  kind: "star" | "capsule" | "moment" | "moon" | "quest" | "trip" | "constellation" | "dream";
   id: string;
 };
 
@@ -98,6 +109,7 @@ type Props = {
   moons: SceneMoon[];
   rewards: SceneReward[];
   planets: ScenePlanet[];
+  dreams: SceneDream[];
   constellations: SceneConstellation[];
   selectedId: string | null;
   onSelect: (target: SceneTarget | null) => void;
@@ -227,6 +239,7 @@ export function UniverseScene({
   moons,
   rewards,
   planets,
+  dreams,
   constellations,
   selectedId,
   onSelect,
@@ -243,6 +256,7 @@ export function UniverseScene({
   const moonsRef = useRef(moons);
   const rewardsRef = useRef(rewards);
   const planetsRef = useRef(planets);
+  const dreamsRef = useRef(dreams);
   const constellationsRef = useRef(constellations);
   const selectedRef = useRef(selectedId);
   const selectRef = useRef(onSelect);
@@ -262,6 +276,7 @@ export function UniverseScene({
     moonsRef.current = moons;
     rewardsRef.current = rewards;
     planetsRef.current = planets;
+    dreamsRef.current = dreams;
     constellationsRef.current = constellations;
     selectedRef.current = selectedId;
     selectRef.current = onSelect;
@@ -401,6 +416,13 @@ export function UniverseScene({
       return { planet, x: point.x, y: point.y, depth: point.depth, r: base };
     };
 
+    const projectDream = (dream: SceneDream) => {
+      const point = projectPoint(dream.positionX, dream.positionY, dream.positionZ, 1, 0);
+      if (!point) return null;
+      const base = Math.max(7, dream.scale * 4.2 * (focal() / point.depth));
+      return { dream, x: point.x, y: point.y, depth: point.depth, r: base };
+    };
+
     const hitTest = (px: number, py: number): SceneTarget | null => {
       let best: SceneTarget | null = null;
       let bestDistance = Number.POSITIVE_INFINITY;
@@ -434,6 +456,10 @@ export function UniverseScene({
       for (const planet of planetsRef.current) {
         const projected = projectPlanet(planet);
         if (projected) consider(planet.tripId, "trip", projected.x, projected.y, projected.r);
+      }
+      for (const dream of dreamsRef.current) {
+        const projected = projectDream(dream);
+        if (projected) consider(dream.dreamId, "dream", projected.x, projected.y, projected.r);
       }
       if (!best) {
         for (const constellation of constellationsRef.current) {
@@ -975,6 +1001,38 @@ export function UniverseScene({
       }
     };
 
+    const drawDream = (entry: NonNullable<ReturnType<typeof projectDream>>, time: number) => {
+      const { dream, x, y, r } = entry;
+      const reduced = reducedMotion.matches;
+      const pulse = reduced ? 1 : 0.85 + Math.sin(time / 1400 + dream.visualSeed) * 0.15;
+      ctx.save();
+      ctx.globalAlpha = clamp(0.85 - entry.depth / (cam.dist + 220), 0.35, 0.8) * pulse;
+      ctx.strokeStyle = "rgba(214, 196, 255, 0.9)";
+      ctx.fillStyle = "rgba(214, 196, 255, 0.55)";
+      ctx.lineWidth = 1.4;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.arc(x, y, r * 1.7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(2.2, r * 0.45), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      if (dream.dreamId === selectedRef.current) {
+        ctx.save();
+        ctx.strokeStyle = CREAM;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.arc(x, y, r * 2.2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      if (dream.dreamId === hoverId || dream.dreamId === selectedRef.current) {
+        labels.push({ x, y: y - r * 2.4, text: dream.title });
+      }
+    };
+
     const drawTwinLinks = (projectedTwins: NonNullable<ReturnType<typeof projectTwin>>[]) => {
       const byMoment = new Map<string, NonNullable<ReturnType<typeof projectTwin>>[]>();
       for (const entry of projectedTwins) {
@@ -1129,6 +1187,10 @@ export function UniverseScene({
           .map((planet) => projectPlanet(planet))
           .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
           .map((entry) => ({ depth: entry.depth, paint: () => drawPlanet(entry, time) })),
+        ...dreamsRef.current
+          .map((dream) => projectDream(dream))
+          .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+          .map((entry) => ({ depth: entry.depth, paint: () => drawDream(entry, time) })),
       ].sort((a, b) => b.depth - a.depth);
       labels.length = 0;
 

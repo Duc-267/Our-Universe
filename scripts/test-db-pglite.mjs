@@ -42,6 +42,7 @@ try {
   await database.exec(readFileSync("supabase/migrations/20261015220000_phase3_constellations.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261015230000_phase3_memory_gravity.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261015240000_phase3_cosmic_events.sql", "utf8"));
+  await database.exec(readFileSync("supabase/migrations/20261015250000_phase3_future_dreams.sql", "utf8"));
   await query("insert into public.profiles (id, display_name) select id, raw_user_meta_data ->> 'display_name' from auth.users");
   await query(
     "insert into auth.users(id, raw_user_meta_data) values ($1, $2::jsonb)",
@@ -663,6 +664,74 @@ try {
   assert.equal(
     (await query("select count(*)::int as n from public.cosmic_events where couple_id = $1", [coupleA]))[0].n,
     milestoneCount,
+  );
+
+  await rejected(
+    () => query("select public.create_dream($1, null, null, $2)", ["", "everyday"]),
+    "empty dream title is rejected",
+  );
+  const [{ create_dream: dreamId }] = await query(
+    "select public.create_dream($1, $2, $3::date, $4)",
+    ["See the aurora", "North of the city", "2020-01-15", "special"],
+  );
+  const distant = (
+    await query(
+      "select object_type, position_x, position_y, position_z from public.cosmic_objects where dream_id = $1",
+      [dreamId],
+    )
+  )[0];
+  assert.equal(distant.object_type, "DISTANT_OBJECT");
+  assert.ok(Math.hypot(Number(distant.position_x), Number(distant.position_y), Number(distant.position_z)) > 110);
+  await query(
+    "select public.update_dream($1, $2, $3, $4::date, $5, $6)",
+    [dreamId, "See the aurora", "North of the city", "2020-01-15", "special", "planned"],
+  );
+  assert.equal(
+    (await query("select count(*)::int as n from public.cosmic_objects where dream_id = $1", [dreamId]))[0].n,
+    1,
+  );
+  await query(
+    "select public.update_dream($1, $2, $3, $4::date, $5, $6)",
+    [dreamId, "See the aurora", "North of the city", "2020-01-15", "special", "completed"],
+  );
+  const completed = (
+    await query("select status, memory_id from public.future_dreams where id = $1", [dreamId])
+  )[0];
+  assert.equal(completed.status, "completed");
+  const dreamMemory = (
+    await query(
+      "select title, category, memory_date::text as memory_date from public.memories where id = $1",
+      [completed.memory_id],
+    )
+  )[0];
+  assert.equal(dreamMemory.title, "See the aurora");
+  assert.equal(dreamMemory.category, "special");
+  assert.equal(dreamMemory.memory_date, "2020-01-15");
+  assert.equal(
+    (await query("select object_type from public.cosmic_objects where memory_id = $1", [completed.memory_id]))[0]
+      .object_type,
+    "STAR",
+  );
+  assert.equal(
+    (await query("select count(*)::int as n from public.cosmic_objects where dream_id = $1", [dreamId]))[0].n,
+    0,
+  );
+  await rejected(
+    () => query(
+      "select public.update_dream($1, $2, null, null, $3, $4)",
+      [dreamId, "Changed", "special", "dream"],
+    ),
+    "completed dream cannot change",
+  );
+  await asUser(userIds.casey);
+  assert.equal(
+    (await query("select count(*)::int as n from public.future_dreams where couple_id = $1", [coupleA]))[0].n,
+    0,
+  );
+  await asUser(userIds.alex);
+  assert.equal(
+    (await query("select count(*)::int as n from public.future_dreams where id = $1", [dreamId]))[0].n,
+    1,
   );
 
   await asOwner();
