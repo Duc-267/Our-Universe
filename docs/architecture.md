@@ -41,6 +41,9 @@
 ### Application (Phase 3 — memory gravity)
 - `private.refresh_memory_gravity` runs on `/universe` load and writes a 0–100 `gravity` score onto each memory star. The score is manual importance times 6, plus 6 per photo and per constellation or trip link, each capped at four. It does not rewrite the memory row and does not move the stored orbit. The canvas uses the score only to scale and fade the sticker.
 
+### Application (Phase 3 — cosmic events)
+- `private.refresh_cosmic_events` inserts one `cosmic_events` row per milestone. Anniversaries are an aurora, 100 days a meteor shower, and 365 days a planet bloom. The unique milestone key makes a second refresh a no-op. The canvas plays that sky only when the couple's local today matches `event_date`.
+
 ## Core modules
 - `scripts/run-skills.sh`: reads `skills/enabled.txt`, executes each skill script, and aggregates failures into a single exit code.
 - `skills/*/*.sh`: small, composable validation units for requirements presence, architecture quality, and DoD completeness.
@@ -98,3 +101,4 @@
 - 2026-10-15: Significant trips become `PLANET` objects keyed by `trip_id`. Trip photos in this slice are the linked memories' photos rather than a separate upload path, keeping Storage rules unchanged.
 - 2026-10-15: Constellations are membership overlays on existing stars, not new cosmic objects. Lines are an extra canvas pass; React Three Fiber stays deferred.
 - 2026-10-18: Memory gravity is a derived score on the existing star. It changes draw size and opacity and leaves the memory row and stored orbit untouched.
+- 2026-10-18: Cosmic events are one sky per milestone. The flourish draws on the existing canvas only on the event date, so a refresh cannot schedule the same anniversary twice.

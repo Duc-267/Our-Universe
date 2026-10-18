@@ -6,6 +6,7 @@ import type { QuestRow } from "@/components/quest-panel";
 import type { SameMomentRow } from "@/components/same-moment-panel";
 import type { TripRow } from "@/components/trip-panel";
 import type { ConstellationRow } from "@/components/constellation-panel";
+import type { CosmicEventRow } from "@/components/cosmic-events-panel";
 import { todayInZone, computeRelationshipAge } from "@/features/couple/age";
 import { skyFromMoods } from "@/features/checkin/weather";
 import type { QuestResponseType, QuestRewardKind } from "@/features/quest/catalog";
@@ -54,8 +55,9 @@ export default async function UniversePage({
   await supabase.rpc("refresh_milestones");
   await supabase.rpc("refresh_quests");
   await supabase.rpc("refresh_memory_gravity");
+  await supabase.rpc("refresh_cosmic_events");
 
-  const [couple, settings, members, memories, photos, objects, capsules, contents, checkins, moments, submissions, milestones, quests, questSubmissions, trips, tripMemories, constellations, constellationMembers] =
+  const [couple, settings, members, memories, photos, objects, capsules, contents, checkins, moments, submissions, milestones, quests, questSubmissions, trips, tripMemories, constellations, constellationMembers, cosmicEvents] =
     await Promise.all([
       supabase
         .from("couples")
@@ -153,6 +155,11 @@ export default async function UniversePage({
         .from("constellation_members")
         .select("constellation_id, memory_id")
         .eq("couple_id", coupleId),
+      supabase
+        .from("cosmic_events")
+        .select("id, kind, event_date, milestone_id")
+        .eq("couple_id", coupleId)
+        .order("event_date", { ascending: false }),
     ]);
   if (
     couple.error ||
@@ -172,7 +179,8 @@ export default async function UniversePage({
     trips.error ||
     tripMemories.error ||
     constellations.error ||
-    constellationMembers.error
+    constellationMembers.error ||
+    cosmicEvents.error
   ) {
     throw new Error("Could not load your universe.");
   }
@@ -471,6 +479,21 @@ export default async function UniversePage({
   }));
 
   const today = todayInZone(settings.data.timezone);
+  const milestoneById = new Map(milestones.data.map((milestone) => [milestone.id, milestone]));
+  const universeEvents: CosmicEventRow[] = cosmicEvents.data.flatMap((event) => {
+    const milestone = milestoneById.get(event.milestone_id);
+    if (!milestone) return [];
+    if (event.kind !== "aurora" && event.kind !== "meteor_shower" && event.kind !== "planet_bloom") {
+      return [];
+    }
+    return [{
+      id: event.id,
+      kind: event.kind,
+      eventDate: event.event_date,
+      title: milestoneTitle(milestone.kind, milestone.key),
+    }];
+  });
+  const skyEvent = universeEvents.find((event) => event.eventDate === today)?.kind ?? null;
   const todaysMoods = checkins.data
     .filter((row) => row.local_date === today)
     .map((row) => row.mood);
@@ -491,6 +514,8 @@ export default async function UniversePage({
         quests={universeQuests}
         trips={universeTrips}
         constellations={universeConstellations}
+        cosmicEvents={universeEvents}
+        skyEvent={skyEvent}
         age={age}
         canInvite={canInvite}
         initialSelectedId={star ?? null}

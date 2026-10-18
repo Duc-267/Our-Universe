@@ -41,6 +41,7 @@ try {
   await database.exec(readFileSync("supabase/migrations/20261015210000_phase3_trips.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261015220000_phase3_constellations.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261015230000_phase3_memory_gravity.sql", "utf8"));
+  await database.exec(readFileSync("supabase/migrations/20261015240000_phase3_cosmic_events.sql", "utf8"));
   await query("insert into public.profiles (id, display_name) select id, raw_user_meta_data ->> 'display_name' from auth.users");
   await query(
     "insert into auth.users(id, raw_user_meta_data) values ($1, $2::jsonb)",
@@ -626,6 +627,42 @@ try {
   assert.equal(
     (await query("select gravity from public.cosmic_objects where memory_id = $1", [gravityLow]))[0].gravity,
     36,
+  );
+
+  await query("select public.refresh_milestones()");
+  await query("select public.refresh_cosmic_events()");
+  const milestoneCount = (
+    await query("select count(*)::int as n from public.milestones where couple_id = $1", [coupleA])
+  )[0].n;
+  assert.equal(
+    (await query("select count(*)::int as n from public.cosmic_events where couple_id = $1", [coupleA]))[0].n,
+    milestoneCount,
+  );
+  const eventKinds = await query(
+    `select m.kind, m.key, e.kind as event_kind
+     from public.cosmic_events e
+     join public.milestones m on m.id = e.milestone_id
+     where e.couple_id = $1`,
+    [coupleA],
+  );
+  assert.ok(eventKinds.some((row) => row.kind === "anniversary" && row.event_kind === "aurora"));
+  assert.ok(eventKinds.some((row) => row.key === "100" && row.event_kind === "meteor_shower"));
+  assert.ok(eventKinds.some((row) => row.key === "365" && row.event_kind === "planet_bloom"));
+  await query("select public.refresh_cosmic_events()");
+  assert.equal(
+    (await query("select count(*)::int as n from public.cosmic_events where couple_id = $1", [coupleA]))[0].n,
+    milestoneCount,
+  );
+  await asUser(userIds.casey);
+  await query("select public.refresh_cosmic_events()");
+  assert.equal(
+    (await query("select count(*)::int as n from public.cosmic_events where couple_id = $1", [coupleA]))[0].n,
+    0,
+  );
+  await asUser(userIds.alex);
+  assert.equal(
+    (await query("select count(*)::int as n from public.cosmic_events where couple_id = $1", [coupleA]))[0].n,
+    milestoneCount,
   );
 
   await asOwner();
