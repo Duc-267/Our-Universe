@@ -43,6 +43,7 @@ try {
   await database.exec(readFileSync("supabase/migrations/20261015230000_phase3_memory_gravity.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261015240000_phase3_cosmic_events.sql", "utf8"));
   await database.exec(readFileSync("supabase/migrations/20261015250000_phase3_future_dreams.sql", "utf8"));
+  await database.exec(readFileSync("supabase/migrations/20261018120000_phase4_ai_archivist.sql", "utf8"));
   await query("insert into public.profiles (id, display_name) select id, raw_user_meta_data ->> 'display_name' from auth.users");
   await query(
     "insert into auth.users(id, raw_user_meta_data) values ($1, $2::jsonb)",
@@ -731,6 +732,44 @@ try {
   await asUser(userIds.alex);
   assert.equal(
     (await query("select count(*)::int as n from public.future_dreams where id = $1", [dreamId]))[0].n,
+    1,
+  );
+
+  await query("select public.refresh_archive()");
+  await query("select public.refresh_archive()");
+  const archive = (
+    await query(
+      "select body, memory_count, top_category from public.archive_summaries where couple_id = $1",
+      [coupleA],
+    )
+  )[0];
+  const archivedMemories = (
+    await query("select count(*)::int as n from public.memories where couple_id = $1", [coupleA])
+  )[0].n;
+  assert.equal(archive.memory_count, archivedMemories);
+  assert.equal(
+    (await query("select count(*)::int as n from public.archive_summaries where couple_id = $1", [coupleA]))[0].n,
+    1,
+  );
+  const topCategory = (
+    await query(
+      "select category from public.memories where couple_id = $1 group by category order by count(*) desc, category asc limit 1",
+      [coupleA],
+    )
+  )[0].category;
+  assert.equal(archive.top_category, topCategory);
+  assert.match(archive.body, new RegExp(`The category recorded most often is ${topCategory}\\.`));
+  assert.match(archive.body, /Moments kept here include /);
+  assert.doesNotMatch(archive.body, /should|advice|healthy|compatib|break up|score/i);
+  await asUser(userIds.casey);
+  await query("select public.refresh_archive()");
+  assert.equal(
+    (await query("select count(*)::int as n from public.archive_summaries where couple_id = $1", [coupleA]))[0].n,
+    0,
+  );
+  await asUser(userIds.alex);
+  assert.equal(
+    (await query("select count(*)::int as n from public.archive_summaries where couple_id = $1", [coupleA]))[0].n,
     1,
   );
 

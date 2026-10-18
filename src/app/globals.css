@@ -321,6 +321,11 @@ button:disabled { cursor: wait; opacity: 0.65; }
 .cosmic-events-card { padding: 1.1rem 1.15rem; border: 2.5px solid var(--ink); border-radius: 1.4rem; background: var(--surface); box-shadow: 0 5px 0 var(--ink), var(--shadow); }
 .cosmic-events-card h2 { margin: 0; font-size: 1.35rem; }
 .cosmic-events-copy, .cosmic-events-meta { margin: 0; color: var(--muted); font-size: 0.84rem; }
+.archive-panel, .archive-card { display: grid; gap: 0.85rem; }
+.archive-card { padding: 1.1rem 1.15rem; border: 2.5px solid var(--ink); border-radius: 1.4rem; background: var(--surface); box-shadow: 0 5px 0 var(--ink), var(--shadow); }
+.archive-card h2 { margin: 0; font-size: 1.35rem; }
+.archive-copy { margin: 0; color: var(--muted); font-size: 0.84rem; }
+.archive-body { margin: 0; line-height: 1.55; }
 .cosmic-events-list { display: grid; gap: 0.45rem; margin: 0; padding: 0; list-style: none; max-height: 14rem; overflow: auto; }
 .cosmic-events-item { display: flex; align-items: center; gap: 0.7rem; }
 .cosmic-events-title { display: block; font-weight: 800; }
