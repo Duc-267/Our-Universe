@@ -13,6 +13,7 @@ export type SceneStar = {
   positionZ: number;
   scale: number;
   brightness: number;
+  gravity: number;
   rotation: number;
   visualSeed: number;
   bright: boolean;
@@ -345,11 +346,13 @@ export function UniverseScene({
       };
     };
 
+    const gravitySize = (gravity: number) => (gravity > 0 ? 0.84 + (gravity / 100) * 0.52 : 1);
+
     const projectStar = (star: SceneStar) => {
       const point = projectPoint(star.positionX, star.positionY, star.positionZ, 1, 0);
       if (!point) return null;
       const f = focal();
-      const base = Math.max(15, star.scale * 4.8 * (f / point.depth));
+      const base = Math.max(15, star.scale * gravitySize(star.gravity) * 4.8 * (f / point.depth));
       return {
         star,
         x: point.x,
@@ -687,9 +690,10 @@ export function UniverseScene({
       const tilt = reduced ? 0 : Math.sin(time / 2600 + star.rotation * 3) * 0.08;
       const fill = categoryColor(star.category);
       const fade = clamp(1.25 - entry.depth / (cam.dist + 90), 0.55, 1);
+      const glow = star.gravity > 0 ? 0.7 + (star.gravity / 100) * 0.3 : 1;
 
       ctx.save();
-      ctx.globalAlpha = fade;
+      ctx.globalAlpha = fade * glow;
       ctx.translate(x, sy);
       ctx.rotate(tilt);
       paintIconSticker(ctx, star.icon, 0, 0, r * 2.75, fill, STICKER_INK);

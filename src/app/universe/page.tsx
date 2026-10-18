@@ -53,6 +53,7 @@ export default async function UniversePage({
   await supabase.rpc("refresh_same_moments");
   await supabase.rpc("refresh_milestones");
   await supabase.rpc("refresh_quests");
+  await supabase.rpc("refresh_memory_gravity");
 
   const [couple, settings, members, memories, photos, objects, capsules, contents, checkins, moments, submissions, milestones, quests, questSubmissions, trips, tripMemories, constellations, constellationMembers] =
     await Promise.all([
@@ -79,7 +80,7 @@ export default async function UniversePage({
       supabase
         .from("cosmic_objects")
         .select(
-          "memory_id, capsule_id, same_moment_id, milestone_id, quest_id, trip_id, twin_slot, object_type, position_x, position_y, position_z, scale, brightness, rotation, visual_seed",
+          "memory_id, capsule_id, same_moment_id, milestone_id, quest_id, trip_id, twin_slot, object_type, position_x, position_y, position_z, scale, brightness, gravity, rotation, visual_seed",
         )
         .eq("couple_id", coupleId)
         .in("object_type", ["STAR", "BRIGHT_STAR", "COMET", "TWIN_STAR", "MOON", "QUEST_REWARD", "PLANET"]),
@@ -290,6 +291,7 @@ export default async function UniversePage({
             positionZ: star.position_z,
             scale: star.scale,
             brightness: star.brightness,
+            gravity: star.gravity,
             rotation: star.rotation,
             visualSeed: star.visual_seed,
           }

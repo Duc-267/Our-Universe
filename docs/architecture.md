@@ -38,6 +38,9 @@
 ### Application (Phase 3 — constellations)
 - `constellations` name a group of existing memory stars; `constellation_members` requires at least two memories from the same couple. There is no new cosmic object type — the canvas draws soft closed lines through the member stars' stored positions and opens the collection detail on select. Deleting a memory cascades the membership row away.
 
+### Application (Phase 3 — memory gravity)
+- `private.refresh_memory_gravity` runs on `/universe` load and writes a 0–100 `gravity` score onto each memory star. The score is manual importance times 6, plus 6 per photo and per constellation or trip link, each capped at four. It does not rewrite the memory row and does not move the stored orbit. The canvas uses the score only to scale and fade the sticker.
+
 ## Core modules
 - `scripts/run-skills.sh`: reads `skills/enabled.txt`, executes each skill script, and aggregates failures into a single exit code.
 - `skills/*/*.sh`: small, composable validation units for requirements presence, architecture quality, and DoD completeness.
@@ -94,3 +97,4 @@
 - 2026-10-15: Couple quests use a fixed catalog in PostgreSQL and TypeScript, one open quest per couple, and a single `QUEST_REWARD` object type with `reward_kind` metadata so the canvas can vary shape without new object-type churn.
 - 2026-10-15: Significant trips become `PLANET` objects keyed by `trip_id`. Trip photos in this slice are the linked memories' photos rather than a separate upload path, keeping Storage rules unchanged.
 - 2026-10-15: Constellations are membership overlays on existing stars, not new cosmic objects. Lines are an extra canvas pass; React Three Fiber stays deferred.
+- 2026-10-18: Memory gravity is a derived score on the existing star. It changes draw size and opacity and leaves the memory row and stored orbit untouched.
