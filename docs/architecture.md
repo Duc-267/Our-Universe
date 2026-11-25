@@ -48,6 +48,17 @@
 - `future_dreams` stores a title, optional description, optional target date, a memory category, and status `dream`, `planned`, or `completed`. Creating one writes `DREAM_RECORDED` and a single `DISTANT_OBJECT` placed beyond the memory-star band. Planning keeps that same object.
 - Marking it completed calls `private.create_memory` (importance 5) and deletes the dream event, so the distant object leaves and a normal star remains. The dream row stays and points at `memory_id`. A completed dream cannot be edited or deleted. Open dreams can be deleted, which removes the distant object.
 
+### Planned — The Little Duck (not implemented)
+Source: `docs/product/little-duck-prd.md` and `docs/backlog/`. Items here are the intended shape. Each becomes a decision record only when its story ships.
+- World zones: the sky keeps the existing canvas projector. A fixed 2D ground layer (pond, garden, house front, mailbox) sits below it, and the duck stays a DOM SVG between the back and front canvases. The sidebar becomes a zone-scoped drawer.
+- Time: the couple timezone keeps deciding shared dates (anniversaries, day counts, check-in day). A per-member IANA timezone decides time of day in the scene and when a dated letter arrives.
+- Duck state is derived, not stored: growth stage from days since the second member joined, activity from the viewer's local time plus world state, and expression from today's moods. Only "stage-up seen" is stored per member. No input measures absence (product guardrail G1).
+- New cosmic object types: `GARDEN_PLANT` (one per memory, alongside its star), `LETTER_KEEPSAKE`, and `PROMISE_STAR`. The one-star-per-memory index becomes one object per memory per type.
+- Letters follow the capsule split: a `letters` row visible to both members and a `letter_contents` row that RLS hides from the recipient until `deliver_at`. Delivery is computed on read by a refresh function, like quests and milestones.
+- Silent touches are rows in their own table, not cosmic objects, because they fade once seen.
+- Presence uses a Supabase Realtime Presence channel per couple and writes nothing to the database.
+- Voice notes need audio MIME types in the `universe-media` bucket. Web push needs a service worker, a scheduled sender, and a server-only VAPID key in Vercel environment variables. That key would be the app's first server-held secret.
+
 ## Core modules
 - `scripts/run-skills.sh`: reads `skills/enabled.txt`, executes each skill script, and aggregates failures into a single exit code.
 - `skills/*/*.sh`: small, composable validation units for requirements presence, architecture quality, and DoD completeness.
@@ -107,3 +118,4 @@
 - 2026-10-18: Memory gravity is a derived score on the existing star. It changes draw size and opacity and leaves the memory row and stored orbit untouched.
 - 2026-10-18: Cosmic events are one sky per milestone. The flourish draws on the existing canvas only on the event date, so a refresh cannot schedule the same anniversary twice.
 - 2026-10-18: A future dream is a `DISTANT_OBJECT` until the couple marks it completed. Completion writes a real memory star and removes the distant object, so the hope does not stay in the sky beside the memory.
+- 2026-11-25: Product direction moves to Our Universe: The Little Duck (`docs/product/little-duck-prd.md`). New work is planned as stories in `docs/backlog/`, outside `docs/requirements/`, because the push gate rejects unchecked items there. A story is copied into `docs/requirements/` when its branch starts.

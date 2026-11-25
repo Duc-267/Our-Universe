@@ -1,5 +1,21 @@
 # Our Universe
 
+## 0. Trạng thái và định hướng (cập nhật 2026-11-25)
+
+Sản phẩm chuyển hướng thành **Our Universe: The Little Duck** — một cozy game cho hai người yêu xa, với chú vịt 2D là nhân vật trung tâm sống trong một thế giới nhỏ có nhà, vườn, bầu trời và hành tinh.
+
+- Brief gốc: [`docs/product/little-duck-brief.md`](docs/product/little-duck-brief.md)
+- PRD (gap analysis, guardrail, release, câu hỏi mở): [`docs/product/little-duck-prd.md`](docs/product/little-duck-prd.md)
+- Story: [`docs/backlog/README.md`](docs/backlog/README.md)
+
+Đã giao (trên `main`): Phase 0, Phase 1, Phase 2, toàn bộ Phase 3 (Epic 3.1–3.9). Epic 4.1 AI Archivist đã xong ở PR [#22](https://github.com/Duc-267/Our-Universe/pull/22), chưa merge; migration của nó đã chạy trên database. Bản production của `main` chạy trên Vercel Hobby.
+
+Phần còn lại của tài liệu này giữ làm bản ghi Phase 0–4. Khi có mâu thuẫn, PRD Little Duck được ưu tiên. Cụ thể:
+
+- Epic 4.2–4.6 chuyển xuống mục Later của backlog.
+- Renderer thực tế là canvas 2D tự viết với phép chiếu 3D, không phải React Three Fiber; ảnh nằm trong Supabase Storage, không phải Cloudflare R2 (xem `docs/architecture.md`). Mục 14 và 21 bên dưới chỉ còn giá trị tham khảo.
+- “Direct messaging” trong mục 19 nghĩa là chat thời gian thực. Thư của Duck Mail nằm trong phạm vi.
+
 ## 1. Product Overview
 
 **Our Universe** là một private digital space dành cho các cặp đôi yêu xa hoặc muốn lưu giữ hành trình của mối quan hệ theo cách trực quan và có tính tương tác.
@@ -19,6 +35,8 @@ Ví dụ:
 
 Mục tiêu dài hạn là sau nhiều tháng hoặc nhiều năm, mỗi couple sở hữu một universe hoàn toàn khác nhau và phản ánh chính lịch sử mối quan hệ của họ.
 
+Từ 2026-11, universe là thế giới của **một chú vịt hai người cùng chia sẻ**. Vịt sống ở hồ; kỷ niệm mọc thành cây trong vườn; thư được vịt mang tới hộp thư; ngôi nhà giữ kỷ vật; bầu trời giữ mặt trăng, hành tinh và chòm sao. Xem PRD Little Duck.
+
 ---
 
 # 2. Product Vision
@@ -26,6 +44,8 @@ Mục tiêu dài hạn là sau nhiều tháng hoặc nhiều năm, mỗi couple 
 ## Vision
 
 Biến lịch sử của một mối quan hệ thành một thế giới sống có thể nhìn thấy, khám phá và tiếp tục xây dựng.
+
+Khẩu hiệu: **“A little universe that grows with us.”**
 
 Our Universe không phải:
 
@@ -37,6 +57,8 @@ Our Universe không phải:
 Our Universe là:
 
 **Digital relationship world + memory archive + cozy interaction experience.**
+
+Cụ thể hơn từ 2026-11: một cozy game cho hai người, không phải game nuôi thú ảo.
 
 ---
 
@@ -97,6 +119,18 @@ thay vì:
 
 ---
 
+## 3.5 No obligation (thêm 2026-11)
+
+Vịt không chết, không đói, không ốm, không buồn vì người dùng vắng mặt. Thế giới lớn lên từ những khoảnh khắc hai người muốn lưu lại, không từ chuỗi đăng nhập. Tám guardrail kiểm thử được (G1–G8) nằm ở mục 3 của PRD Little Duck và là điều kiện merge của mọi story mới.
+
+---
+
+## 3.6 Presence without pressure (thêm 2026-11)
+
+Hai người có thể cho nhau biết mình đã ghé qua (dấu chạm, thư) mà không cần online cùng lúc, không cần trả lời, và không có “đã xem” cho dấu chạm.
+
+---
+
 # 4. Primary Users
 
 ## Persona A — Long-distance couple
@@ -148,6 +182,18 @@ Monthly Summary
 Yearly Wrapped
 ```
 
+Thêm từ 2026-11 (Little Duck):
+
+```text
+Duck (tên, giai đoạn lớn — một con mỗi couple)
+Letter (Duck Mail)
+Silent Touch
+Garden Plant
+Promise
+Home Item
+Keepsake
+```
+
 ---
 
 # 6. Universe Mapping
@@ -170,6 +216,10 @@ Yearly Wrapped
 | Future Plan | Distant Object |
 
 Universe Engine quyết định visual representation dựa trên metadata của event.
+
+Trạng thái đến 2026-11: Star, Bright Star, Twin Stars, Planet, Moon, Comet (capsule), phần thưởng quest, Cosmic Event (aurora, meteor shower, planet bloom), Constellation và Distant Object đã có. Crater, Aurora theo hoạt động dài, Binary Star và Pulsar chưa làm và nằm trong mục Later.
+
+Little Duck bổ sung: kỷ niệm → cây trong vườn, thư kỷ vật → đèn lồng giấy, lời hứa → Promise Star, cột mốc → đồ trang trí trong nhà, chuyến đi → kỷ vật. Bảng đầy đủ ở mục 5 của PRD Little Duck.
 
 ---
 
@@ -196,6 +246,14 @@ Quests + Constellations + Milestones + Universe progression.
 ## Phase 4 — Relationship Intelligence
 
 AI Archivist + Monthly Story + Couple Wrapped.
+
+## Phase 5 — The Little Duck (thêm 2026-11)
+
+- Release 1 “Vịt về nhà” (P0): thế giới nhiều vùng, giờ theo từng người, Duck Life, thư chữ (ngay và hẹn giờ), Memory Garden, Silent Touch.
+- Release 2 “Ngôi nhà nhỏ” (P1): thư ảnh và voice note, Duck Home, Duck Explorer, Promise Stars, presence, PWA và web push, giao diện vi / ko / en.
+- Release 3 “Chuyện của vịt” (P2): kỷ vật, thói quen của vịt, sổ tay của vịt.
+
+Trạng thái các phase: 0–3 đã xong; 4.1 chờ merge PR #22; 4.2–4.6 chuyển xuống Later; Phase 5 là ưu tiên tiếp theo. Story ở `docs/backlog/`.
 
 ---
 
@@ -1568,6 +1626,8 @@ Potential notification types:
 - anniversary
 - quest available
 
+Little Duck thêm: thư đã đến (kể cả thư hẹn giờ) và có đồ mới trong nhà. Dấu chạm im lặng không tạo thông báo. Không có thông báo nhắc mở app, nhắc check-in hay nhắc trả lời (story LD-8.2).
+
 Notifications should not include sensitive content directly.
 
 Example:
@@ -1701,6 +1761,13 @@ Do not build initially:
 
 These features add complexity without validating the core concept.
 
+Làm rõ năm 2026-11 cho Little Duck:
+
+- “Direct messaging” là chat thời gian thực (thread, “đang nhập…”). Thư Duck Mail (gửi ngay hoặc hẹn giờ, mỗi lá là một vật riêng) nằm trong phạm vi.
+- “Multiplayer game world” là thế giới có người lạ. Thế giới chung cho đúng hai người là sản phẩm chính.
+- “Custom avatar system” vẫn loại trừ. Vịt là một nhân vật chung; chỉ đặt được tên.
+- Thêm vào danh sách loại trừ: cơ chế nuôi thú (đói, ốm, chết), streak, cửa hàng và tiền ảo, dịch tự động nội dung thư, thời tiết thật theo vị trí.
+
 ---
 
 # 20. Recommended Development Order
@@ -1783,6 +1850,8 @@ Universe progression.
 ---
 
 # 21. Suggested Technical Architecture
+
+Ghi chú 2026-11: sơ đồ dưới đây là đề xuất ban đầu. Kiến trúc thực tế (canvas 2D, Supabase Storage, Vercel) và kế hoạch cho Little Duck nằm ở `docs/architecture.md`.
 
 ```text
                     Browser

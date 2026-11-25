@@ -1,6 +1,8 @@
 # Our Universe
 
-This repository contains the Our Universe product specification, a requirement-first development harness, and the Phase 0–1 application in `src/app`. Phase 0 behavior is tracked in `docs/requirements/phase-0-foundation.md` and Phase 1 (universe and memories) in `docs/requirements/phase-1-universe-memories.md`; database and live authentication checks still require a configured Supabase project.
+This repository contains the Our Universe product specification, a requirement-first development harness, and the application in `src/app`. Phases 0–3 of `SPEC.md` are delivered; each shipped feature has its requirement in `docs/requirements/`. Database and live authentication checks still require a configured Supabase project.
+
+The product is moving toward **Our Universe: The Little Duck**, a cozy two-player world around a shared duck. Start with [`docs/product/little-duck-prd.md`](docs/product/little-duck-prd.md) for the direction and [`docs/backlog/README.md`](docs/backlog/README.md) for the stories and release order.
 
 ## Application scaffold
 
@@ -41,7 +43,9 @@ The harness focuses on:
 ├── AGENTS.md
 ├── docs/
 │   ├── architecture.md
-│   └── requirements/
+│   ├── product/            # Little Duck brief and PRD
+│   ├── backlog/            # stories not yet started
+│   └── requirements/       # one file per started or shipped feature
 │       └── feature-template.md
 ├── skills/
 │   ├── enabled.txt
