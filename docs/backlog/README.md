@@ -35,10 +35,10 @@ S ≈ 1–2 ngày, M ≈ 3–5 ngày, L ≈ 1–2 tuần, XL nên tách nhỏ tr
 
 | ID | Story | Ưu tiên | Kích thước | Release | Phụ thuộc | Câu hỏi | Trạng thái |
 |---|---|---|---|---|---|---|---|
-| LD-0.1 | Thế giới nhiều vùng | P0 | L | 1 | — | — | Ready |
+| LD-0.1 | Thế giới nhiều vùng | P0 | L | 1 | — | — | Done (PR living-world) |
 | LD-0.2 | Múi giờ của từng người | P0 | M | 1 | — | — | Ready |
 | LD-0.3 | Sáng, chiều, tối theo giờ người xem | P0 | M | 1 | LD-0.2 | Q9 | Chờ PO |
-| LD-0.4 | Gom thanh bên thành điểm vào theo vùng | P0 | M | 1 | LD-0.1 | — | Ready |
+| LD-0.4 | Gom thanh bên thành điểm vào theo vùng | P0 | M | 1 | LD-0.1 | — | Done (PR living-world) |
 | LD-1.1 | Hoạt động nhỏ của vịt | P0 | L | 1 | LD-0.1, LD-0.3 | — | Ready sau LD-0.3 |
 | LD-1.2 | Chọn mood ngay trong cảnh, biểu cảm rõ hơn | P0 | M | 1 | — | — | Ready |
 | LD-1.3 | Vuốt ve, ôm, tặng tim cho vịt | P0 | M | 1 | — | — | Ready |

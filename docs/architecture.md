@@ -48,9 +48,14 @@
 - `future_dreams` stores a title, optional description, optional target date, a memory category, and status `dream`, `planned`, or `completed`. Creating one writes `DREAM_RECORDED` and a single `DISTANT_OBJECT` placed beyond the memory-star band. Planning keeps that same object.
 - Marking it completed calls `private.create_memory` (importance 5) and deletes the dream event, so the distant object leaves and a normal star remains. The dream row stays and points at `memory_id`. A completed dream cannot be edited or deleted. Open dreams can be deleted, which removes the distant object.
 
+### Application (Phase 5 — living world)
+- `/universe` is a full-viewport world. The sky keeps the canvas projector; a DOM SVG island (`world-island.tsx`) sits between the back and front canvases with the duck. Pond, garden, house, and mailbox are hit targets. Sky objects still project in 3D and pass behind and in front of the island.
+- Stored orbits sit inside the island footprint, so the scene widens them on screen (`ORBIT_SPREAD`) and pulls the camera back so the island stays readable. The right-side or bottom zone drawer shifts the free view area; the island eases into that free space.
+- A zone dock replaces the old side column. Pond, Garden, Sky, Home, and Mailbox open a drawer that restyles the existing panels. Dots mark an open Same Moment, an open quest, or a ready capsule — never a check-in nag. Escape closes the drawer and restores focus.
+- `/preview-world` is a public fixture page for visual QA of the empty and populated island without auth.
+
 ### Planned — The Little Duck (not implemented)
 Source: `docs/product/little-duck-prd.md` and `docs/backlog/`. Items here are the intended shape. Each becomes a decision record only when its story ships.
-- World zones: the sky keeps the existing canvas projector. A fixed 2D ground layer (pond, garden, house front, mailbox) sits below it, and the duck stays a DOM SVG between the back and front canvases. The sidebar becomes a zone-scoped drawer.
 - Time: the couple timezone keeps deciding shared dates (anniversaries, day counts, check-in day). A per-member IANA timezone decides time of day in the scene and when a dated letter arrives.
 - Duck state is derived, not stored: growth stage from days since the second member joined, activity from the viewer's local time plus world state, and expression from today's moods. Only "stage-up seen" is stored per member. No input measures absence (product guardrail G1).
 - New cosmic object types: `GARDEN_PLANT` (one per memory, alongside its star), `LETTER_KEEPSAKE`, and `PROMISE_STAR`. The one-star-per-memory index becomes one object per memory per type.
@@ -71,8 +76,9 @@ Source: `docs/product/little-duck-prd.md` and `docs/backlog/`. Items here are th
 - `scripts/test-db-pglite.mjs`: an in-memory migration and authorization check runnable on Windows without a container. CI also runs the PostgreSQL 17 integration suite in `scripts/test-db.sh` to test independent concurrent transactions.
 
 ### Application (Phase 1)
-- `src/components/universe-scene.tsx`: canvas renderer with 3D projection, pointer/touch/wheel/keyboard camera controls, and hit-tested star selection.
-- `src/components/universe-view.tsx`: universe toolbar with relationship age, empty state, semantic star list, and the memory detail dialog with author-only edit and delete.
+- `src/components/universe-scene.tsx`: canvas renderer with 3D projection, pointer/touch/wheel/keyboard camera controls, hit-tested star selection, and the Phase 5 island layer.
+- `src/components/universe-view.tsx`: full-viewport world shell with zone dock, zone drawers, relationship age chip, empty state, and memory/capsule detail dialogs.
+- `src/components/world-island.tsx` / `world-zones.tsx`: SVG island hotspots and the dock/drawer chrome for Pond, Garden, Sky, Home, and Mailbox.
 - `src/features/memory/`: server actions and validation for creating, updating, and deleting memories through the private database functions.
 - `src/features/couple/age.ts`: timezone-correct relationship age and anniversary countdown.
 - `supabase/tests/phase1.sql`: PostgreSQL 17 checks for memory ownership, cross-couple privacy, and star consistency, running in CI after the Phase 0 suite.
@@ -119,3 +125,4 @@ Source: `docs/product/little-duck-prd.md` and `docs/backlog/`. Items here are th
 - 2026-10-18: Cosmic events are one sky per milestone. The flourish draws on the existing canvas only on the event date, so a refresh cannot schedule the same anniversary twice.
 - 2026-10-18: A future dream is a `DISTANT_OBJECT` until the couple marks it completed. Completion writes a real memory star and removes the distant object, so the hope does not stay in the sky beside the memory.
 - 2026-11-25: Product direction moves to Our Universe: The Little Duck (`docs/product/little-duck-prd.md`). New work is planned as stories in `docs/backlog/`, outside `docs/requirements/`, because the push gate rejects unchecked items there. A story is copied into `docs/requirements/` when its branch starts.
+- 2026-11-25: The living world (LD-0.1, LD-0.4) is a full-viewport island SVG between the sky canvases, with a zone dock and drawer instead of the side column. Default duck ornaments stay removed. React Three Fiber remains deferred.
