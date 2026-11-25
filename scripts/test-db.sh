@@ -15,6 +15,7 @@ psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261015220000_phase3_constellati
 psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261015230000_phase3_memory_gravity.sql
 psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261015240000_phase3_cosmic_events.sql
 psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261015250000_phase3_future_dreams.sql
+psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261018120000_phase4_ai_archivist.sql
 psql -v ON_ERROR_STOP=1 -f supabase/tests/phase0.sql
 psql -v ON_ERROR_STOP=1 -f supabase/tests/phase1.sql
 psql -v ON_ERROR_STOP=1 -f supabase/tests/phase2.sql
@@ -27,6 +28,7 @@ psql -v ON_ERROR_STOP=1 -f supabase/tests/phase3-constellations.sql
 psql -v ON_ERROR_STOP=1 -f supabase/tests/phase3-memory-gravity.sql
 psql -v ON_ERROR_STOP=1 -f supabase/tests/phase3-cosmic-events.sql
 psql -v ON_ERROR_STOP=1 -f supabase/tests/phase3-future-dreams.sql
+psql -v ON_ERROR_STOP=1 -f supabase/tests/phase4-ai-archivist.sql
 
 mapfile -t tokens < <(psql -At -v ON_ERROR_STOP=1 -c 'select token from test.race_tokens order by n')
 test "${#tokens[@]}" -eq 2

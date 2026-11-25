@@ -48,6 +48,9 @@
 - `future_dreams` stores a title, optional description, optional target date, a memory category, and status `dream`, `planned`, or `completed`. Creating one writes `DREAM_RECORDED` and a single `DISTANT_OBJECT` placed beyond the memory-star band. Planning keeps that same object.
 - Marking it completed calls `private.create_memory` (importance 5) and deletes the dream event, so the distant object leaves and a normal star remains. The dream row stays and points at `memory_id`. A completed dream cannot be edited or deleted. Open dreams can be deleted, which removes the distant object.
 
+### Application (Phase 4 — archive)
+- `private.refresh_archive` runs on `/universe` load and upserts one `archive_summaries` row. The paragraph counts memories, check-ins, completed Same Moments, trips, completed quests, milestones, constellations, and dreams, names the most recorded memory category, and lists up to three recent titles. An empty couple gets one fixed sentence. The text does not score or advise.
+
 ## Core modules
 - `scripts/run-skills.sh`: reads `skills/enabled.txt`, executes each skill script, and aggregates failures into a single exit code.
 - `skills/*/*.sh`: small, composable validation units for requirements presence, architecture quality, and DoD completeness.
@@ -107,3 +110,4 @@
 - 2026-10-18: Memory gravity is a derived score on the existing star. It changes draw size and opacity and leaves the memory row and stored orbit untouched.
 - 2026-10-18: Cosmic events are one sky per milestone. The flourish draws on the existing canvas only on the event date, so a refresh cannot schedule the same anniversary twice.
 - 2026-10-18: A future dream is a `DISTANT_OBJECT` until the couple marks it completed. Completion writes a real memory star and removes the distant object, so the hope does not stay in the sky beside the memory.
+- 2026-10-18: The archive summary is assembled in PostgreSQL from stored counts and titles. It recounts what was kept and does not call a model, score the relationship, or give advice.

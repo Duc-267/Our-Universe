@@ -8,6 +8,7 @@ import type { TripRow } from "@/components/trip-panel";
 import type { ConstellationRow } from "@/components/constellation-panel";
 import type { CosmicEventRow } from "@/components/cosmic-events-panel";
 import type { DreamRow } from "@/components/dream-panel";
+import type { ArchiveSummary } from "@/components/archive-panel";
 import { todayInZone, computeRelationshipAge } from "@/features/couple/age";
 import { skyFromMoods } from "@/features/checkin/weather";
 import type { QuestResponseType, QuestRewardKind } from "@/features/quest/catalog";
@@ -58,8 +59,9 @@ export default async function UniversePage({
   await supabase.rpc("refresh_quests");
   await supabase.rpc("refresh_memory_gravity");
   await supabase.rpc("refresh_cosmic_events");
+  await supabase.rpc("refresh_archive");
 
-  const [couple, settings, members, memories, photos, objects, capsules, contents, checkins, moments, submissions, milestones, quests, questSubmissions, trips, tripMemories, constellations, constellationMembers, cosmicEvents, dreams] =
+  const [couple, settings, members, memories, photos, objects, capsules, contents, checkins, moments, submissions, milestones, quests, questSubmissions, trips, tripMemories, constellations, constellationMembers, cosmicEvents, dreams, archive] =
     await Promise.all([
       supabase
         .from("couples")
@@ -167,6 +169,11 @@ export default async function UniversePage({
         .select("id, title, description, target_date, category, status, created_by, memory_id, created_at")
         .eq("couple_id", coupleId)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("archive_summaries")
+        .select("body")
+        .eq("couple_id", coupleId)
+        .maybeSingle(),
     ]);
   if (
     couple.error ||
@@ -188,7 +195,8 @@ export default async function UniversePage({
     constellations.error ||
     constellationMembers.error ||
     cosmicEvents.error ||
-    dreams.error
+    dreams.error ||
+    archive.error
   ) {
     throw new Error("Could not load your universe.");
   }
@@ -558,6 +566,7 @@ export default async function UniversePage({
         dreams={universeDreams}
         constellations={universeConstellations}
         cosmicEvents={universeEvents}
+        archive={archive.data ? { body: archive.data.body } : null}
         skyEvent={skyEvent}
         age={age}
         canInvite={canInvite}
