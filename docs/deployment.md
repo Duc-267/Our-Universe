@@ -12,6 +12,15 @@
 - Confirm signup email template: the Free plan's default email service does not allow editing the template. Its link verifies the email at Supabase, then redirects to `/auth/callback?next=...`. When the link opens in a different browser, the PKCE verifier cookie is absent; the callback then asks the user to sign in with the password they created. If custom SMTP is configured later, replace the confirmation link with `<a href="{{ .RedirectTo }}&amp;token_hash={{ .TokenHash }}&amp;type=email">Confirm your email</a>` so the callback can verify the token and create a session across browsers.
 - Data API: enabled; automatic exposure of new tables: disabled; automatic RLS: enabled
 
+## Production hosting
+
+- Host: Vercel Hobby, team `universe-e0db`, project `our-universe` (framework preset Next.js)
+- Production URL: `https://our-universe-gamma-brown.vercel.app`
+- First deployed on 2026-10-18 from `main` at `d618815` with the Vercel CLI. The project is not connected to GitHub, so pushes to `main` do not deploy automatically.
+- Environment variables (production, preview, development): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_APP_URL` (the production URL above). All three are public values.
+- Vercel Authentication (deployment protection) is turned off so the couple can open the site without a Vercel account.
+- Sign-up confirmation links redirect to `<NEXT_PUBLIC_APP_URL>/auth/callback`. Add `https://our-universe-gamma-brown.vercel.app/**` to the Supabase authentication redirect allowlist, or confirmation emails from the production site will be rejected.
+
 Do not put database passwords or secret/service-role API keys in this repository. The local app reads only the project URL and publishable key from ignored `.env.local`.
 
 ## Migration history
