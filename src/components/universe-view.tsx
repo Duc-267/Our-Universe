@@ -608,8 +608,6 @@ export function UniverseView({
             onSelect={(id) => setSelected(id ? { kind: "moon", id } : null)}
           />
           <CosmicEventsPanel events={cosmicEvents} />
-        </div>
-      </div>
       {memories.length > 0 && (
         <section className="universe-list" aria-labelledby="universe-stars-heading">
           <div className="universe-list-head">
@@ -679,6 +677,8 @@ export function UniverseView({
           </ul>
         </section>
       )}
+        </div>
+      </div>
       {selectedMemory && <MemoryDialog memory={selectedMemory} onClose={closeDetail} />}
       {selectedCapsule && <CapsuleDialog capsule={selectedCapsule} onClose={closeDetail} />}
       {selectedMoment && <SameMomentDialog moment={selectedMoment} onClose={closeDetail} />}

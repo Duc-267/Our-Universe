@@ -99,17 +99,17 @@ button:disabled { cursor: wait; opacity: 0.65; }
 .danger-button { color: var(--danger); }
 
 /* Header */
-.universe-page { position: relative; min-height: 100vh; }
-.app-header { position: relative; z-index: 3; min-height: 4.2rem; display: flex; align-items: center; gap: 1.6rem; padding: 0.6rem clamp(1.2rem, 3vw, 3rem); border-bottom: 1px solid var(--line); background: rgba(21, 16, 54, 0.7); backdrop-filter: blur(8px); }
+.universe-page { position: relative; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+.app-header { position: relative; z-index: 3; flex: none; min-height: 4.2rem; display: flex; align-items: center; gap: 1.6rem; padding: 0.6rem clamp(1.2rem, 3vw, 3rem); border-bottom: 1px solid var(--line); background: rgba(21, 16, 54, 0.7); backdrop-filter: blur(8px); }
 .header-couple { color: var(--muted); border-left: 1px solid var(--line); padding-left: 1.6rem; white-space: nowrap; font-weight: 700; }
 .header-nav { display: flex; align-items: center; gap: 1.3rem; margin-left: auto; }
 .header-nav a { color: var(--text); text-decoration: none; font-weight: 700; font-size: 0.95rem; padding: 0.35rem 0; }
 .header-nav a:hover { text-decoration: underline; text-underline-offset: 0.2em; }
 
 /* Universe layout */
-.universe-shell { position: relative; display: flex; flex-direction: column; gap: 1.6rem; padding: 1.2rem clamp(1rem, 3vw, 3rem) 3rem; }
-.universe-layout { display: grid; grid-template-columns: minmax(0, 1fr) 22rem; gap: 1.2rem; align-items: stretch; }
-.universe-stage { position: relative; min-height: clamp(26rem, 68vh, 46rem); border: 2.5px solid var(--ink); border-radius: 1.6rem; overflow: hidden; box-shadow: 0 6px 0 var(--ink), var(--shadow); background: #151036; }
+.universe-shell { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0.8rem clamp(1rem, 3vw, 3rem); overflow: hidden; }
+.universe-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem); gap: 1rem; align-items: stretch; }
+.universe-stage { position: relative; height: 100%; min-height: 0; border: 2.5px solid var(--ink); border-radius: 1.6rem; overflow: hidden; box-shadow: 0 6px 0 var(--ink), var(--shadow); background: #151036; }
 .universe-toolbar { position: absolute; z-index: 4; inset: 1rem 1rem auto 1rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem; pointer-events: none; }
 .universe-toolbar > * { pointer-events: auto; }
 .universe-age-chip { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0; padding: 0.45rem 0.95rem; border: 2px solid var(--ink); border-radius: 999px; background: var(--text); color: var(--ink); font-weight: 800; font-size: 0.9rem; box-shadow: 0 3px 0 var(--ink); }
@@ -233,7 +233,7 @@ button:disabled { cursor: wait; opacity: 0.65; }
 .checkin-save { min-height: 2.9rem; width: 100%; }
 .checkin-history { padding: 0.8rem 1rem; border: 2px solid var(--line); border-radius: 1rem; background: rgba(34, 26, 76, 0.6); color: var(--muted); }
 .checkin-history summary { cursor: pointer; font-weight: 800; color: var(--text); }
-.checkin-history ul { display: grid; gap: 0.45rem; margin: 0.7rem 0 0; padding: 0; list-style: none; max-height: 14rem; overflow: auto; }
+.checkin-history ul { display: grid; gap: 0.45rem; margin: 0.7rem 0 0; padding: 0; list-style: none; max-height: 14rem; overflow-x: hidden; overflow-y: auto; }
 .checkin-history li { display: flex; flex-wrap: wrap; gap: 0.3rem 0.7rem; font-size: 0.88rem; }
 .checkin-note { color: var(--text); }
 
@@ -282,20 +282,23 @@ button:disabled { cursor: wait; opacity: 0.65; }
 .capsule-mark { width: 2.6rem; height: 2.6rem; flex: none; border: 2px solid var(--ink); border-radius: 999px; background: radial-gradient(circle at 35% 35%, #fff, #d7e6ff 42%, transparent 43%), linear-gradient(115deg, transparent 20%, rgba(186, 214, 255, 0.9) 20% 34%, transparent 34%); }
 .capsule-mark.is-ready { background: radial-gradient(circle at 35% 35%, #fff, #fff1c2 42%, transparent 43%), linear-gradient(115deg, transparent 20%, #ffd23a 20% 34%, transparent 34%); }
 .capsule-mark.is-open { background: var(--starlight); }
-.universe-side { display: grid; gap: 1rem; align-content: start; }
+.universe-side { display: grid; gap: 0.85rem; align-content: start; height: 100%; min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 0 0.2rem 0.9rem 0; scrollbar-color: rgba(255, 246, 230, 0.35) transparent; }
+.universe-side > * { min-width: 0; max-width: 100%; }
+.universe-side .star-list { grid-template-columns: minmax(0, 1fr); }
+.universe-side h2, .universe-side .dream-title, .universe-side .trip-title, .universe-side .archive-body { overflow-wrap: anywhere; }
 .same-moment-panel, .same-moment-card, .milestones-panel, .milestones-card, .quest-panel, .quest-card, .trip-panel, .trip-card, .constellation-panel, .constellation-card, .dream-panel, .dream-card { display: grid; gap: 0.85rem; }
 .trip-card, .constellation-card { padding: 1.1rem 1.15rem; border: 2.5px solid var(--ink); border-radius: 1.4rem; background: var(--surface); box-shadow: 0 5px 0 var(--ink), var(--shadow); }
-.trip-card-head, .constellation-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.8rem; }
+.trip-card-head, .constellation-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.8rem; min-width: 0; flex-wrap: wrap; }
 .trip-card h2, .constellation-card h2 { margin: 0; font-size: 1.35rem; }
 .trip-copy, .trip-empty, .constellation-copy, .constellation-empty { margin: 0; color: var(--muted); font-size: 0.92rem; line-height: 1.45; }
-.trip-list, .constellation-list { display: grid; gap: 0.45rem; margin: 0; padding: 0; list-style: none; max-height: 16rem; overflow: auto; }
+.trip-list, .constellation-list { display: grid; gap: 0.45rem; margin: 0; padding: 0; list-style: none; max-height: 16rem; overflow-x: hidden; overflow-y: auto; }
 .trip-item, .constellation-item { display: flex; align-items: center; gap: 0.7rem; width: 100%; min-height: 3.2rem; padding: 0.45rem 0.7rem; border: 2px solid var(--line); border-radius: 0.9rem; background: var(--surface-2); color: var(--text); text-align: left; }
 .trip-item:hover, .constellation-item:hover { border-color: var(--line-strong); }
 .trip-item[aria-current="true"], .constellation-item[aria-current="true"] { border-color: var(--ink); box-shadow: 0 3px 0 var(--ink); }
 .trip-mark, .constellation-mark { width: 1.15rem; height: 1.15rem; border-radius: 50%; border: 2px solid var(--ink); background: var(--surface); flex: none; }
 .trip-mark.is-planet { background: radial-gradient(circle at 30% 30%, #7ec8ff, #2b5f9e); }
-.dream-card-head, .dream-item { display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; }
-.dream-item { width: 100%; min-height: 3.2rem; padding: 0.45rem 0.7rem; border: 2px solid var(--line); border-radius: 0.9rem; background: var(--surface-2); color: var(--text); text-align: left; justify-content: flex-start; }
+.dream-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.7rem; min-width: 0; flex-wrap: wrap; }
+.dream-item { display: flex; align-items: center; justify-content: flex-start; gap: 0.7rem; width: 100%; min-width: 0; min-height: 3.2rem; padding: 0.45rem 0.7rem; border: 2px solid var(--line); border-radius: 0.9rem; background: var(--surface-2); color: var(--text); text-align: left; }
 .dream-item:hover { border-color: var(--line-strong); }
 .dream-item[aria-current="true"] { border-color: var(--ink); box-shadow: 0 3px 0 var(--ink); }
 .dream-text { display: grid; gap: 0.1rem; min-width: 0; }
@@ -326,7 +329,7 @@ button:disabled { cursor: wait; opacity: 0.65; }
 .archive-card h2 { margin: 0; font-size: 1.35rem; }
 .archive-copy { margin: 0; color: var(--muted); font-size: 0.84rem; }
 .archive-body { margin: 0; line-height: 1.55; }
-.cosmic-events-list { display: grid; gap: 0.45rem; margin: 0; padding: 0; list-style: none; max-height: 14rem; overflow: auto; }
+.cosmic-events-list { display: grid; gap: 0.45rem; margin: 0; padding: 0; list-style: none; max-height: 14rem; overflow-x: hidden; overflow-y: auto; }
 .cosmic-events-item { display: flex; align-items: center; gap: 0.7rem; }
 .cosmic-events-title { display: block; font-weight: 800; }
 .cosmic-events-mark { width: 1.15rem; height: 1.15rem; border-radius: 50%; border: 2px solid var(--ink); flex: none; }
@@ -352,7 +355,7 @@ button:disabled { cursor: wait; opacity: 0.65; }
 .milestones-card { padding: 1.1rem 1.15rem; border: 2.5px solid var(--ink); border-radius: 1.4rem; background: var(--surface); box-shadow: 0 5px 0 var(--ink), var(--shadow); }
 .milestones-card h2 { margin: 0; font-size: 1.35rem; }
 .milestones-copy { margin: 0; color: var(--muted); font-size: 0.92rem; line-height: 1.45; }
-.milestones-list { display: grid; gap: 0.45rem; margin: 0; padding: 0; list-style: none; max-height: 16rem; overflow: auto; }
+.milestones-list { display: grid; gap: 0.45rem; margin: 0; padding: 0; list-style: none; max-height: 16rem; overflow-x: hidden; overflow-y: auto; }
 .milestones-item { display: flex; align-items: center; gap: 0.7rem; width: 100%; min-height: 3.2rem; padding: 0.45rem 0.7rem; border: 2px solid var(--line); border-radius: 0.9rem; background: var(--surface-2); color: var(--text); text-align: left; }
 .milestones-item:hover { border-color: var(--line-strong); }
 .milestones-item[aria-current="true"] { border-color: var(--ink); box-shadow: 0 3px 0 var(--ink); }
@@ -409,7 +412,11 @@ button:disabled { cursor: wait; opacity: 0.65; }
 .member-self { margin-left: auto; color: var(--muted); font-size: 0.9rem; }
 
 @media (max-width: 1080px) {
-  .universe-layout { grid-template-columns: 1fr; }
+  .universe-page { height: auto; min-height: 100dvh; overflow: visible; }
+  .universe-shell { overflow: visible; }
+  .universe-layout { grid-template-columns: 1fr; height: auto; min-height: 0; flex: none; }
+  .universe-stage { height: auto; min-height: min(68dvh, 36rem); }
+  .universe-side { height: auto; overflow: visible; padding-bottom: 0; }
   .mood-picker { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
@@ -429,7 +436,7 @@ button:disabled { cursor: wait; opacity: 0.65; }
   .header-couple { display: none; }
   .header-nav { gap: 0.9rem; font-size: 0.9rem; }
   .universe-shell { padding: 0.8rem 0.7rem 2.5rem; }
-  .universe-stage { min-height: 62vh; border-radius: 1.2rem; }
+  .universe-stage { min-height: min(62dvh, 32rem); border-radius: 1.2rem; }
   .universe-toolbar { inset: 0.7rem 0.7rem auto 0.7rem; }
   .universe-add { margin-left: 0; }
   .scene-controls { right: 0.7rem; bottom: 0.7rem; }

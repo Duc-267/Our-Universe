@@ -128,7 +128,6 @@ const CREAM = "#fff6e6";
 
 type BackgroundStar = { x: number; y: number; z: number; size: number; twinkle: boolean; phase: number };
 type Cloud = { x: number; y: number; scale: number; depth: number; puffs: [number, number, number][] };
-type Mote = { angle: number; radius: number; lift: number; heart: boolean; hue: string; size: number };
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -166,22 +165,6 @@ function makeClouds(): Cloud[] {
     { x: 0.86, y: 0.58, scale: 52, depth: 0.45, puffs: shapes[2] },
     { x: 0.32, y: 0.78, scale: 40, depth: 0.3, puffs: shapes[1] },
   ];
-}
-
-function makeMotes(): Mote[] {
-  const motes: Mote[] = [];
-  for (let i = 0; i < 22; i += 1) {
-    const heart = i % 3 === 0;
-    motes.push({
-      angle: (i / 22) * Math.PI * 2,
-      radius: 40 + (i % 4) * 5,
-      lift: Math.sin(i * 1.7) * 14,
-      heart,
-      hue: heart ? "#ff8fab" : i % 2 === 0 ? "#ffd23a" : CREAM,
-      size: heart ? 3.4 : 1.4 + (i % 3) * 0.4,
-    });
-  }
-  return motes;
 }
 
 function paintBackdrop(target: HTMLCanvasElement, width: number, height: number) {
@@ -302,7 +285,6 @@ export function UniverseScene({
     const cam = { yaw: START_YAW, pitch: START_PITCH, dist: START_DIST };
     const background = makeBackgroundStars(200);
     const clouds = makeClouds();
-    const motes = makeMotes();
     const backdrop = document.createElement("canvas");
     const moon = makeMoon();
     const pointers = new Map<number, { x: number; y: number }>();
@@ -520,38 +502,6 @@ export function UniverseScene({
       return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
     };
 
-    const drawOrbit = (time: number, near: boolean, centerDepth: number) => {
-      const spin = reducedMotion.matches ? 0 : time / 30000;
-      const rings = [
-        { radius: 50, tilt: 0.28, alpha: 0.5, dash: 0 },
-        { radius: 64, tilt: -0.18, alpha: 0.28, dash: 1 },
-      ];
-      for (const ring of rings) {
-        ctx.save();
-        ctx.lineCap = "round";
-        ctx.strokeStyle = `rgba(255, 241, 194, ${near ? ring.alpha : ring.alpha * 0.6})`;
-        ctx.lineWidth = near ? 2.2 : 1.6;
-        if (ring.dash) ctx.setLineDash([2, 9]);
-        ctx.beginPath();
-        let drawing = false;
-        for (let i = 0; i <= 96; i += 1) {
-          const angle = (i / 96) * Math.PI * 2 + spin;
-          const px = Math.cos(angle) * ring.radius;
-          const pz = Math.sin(angle) * ring.radius;
-          const point = projectPoint(px, Math.sin(angle) * ring.radius * ring.tilt, pz, 1, 0);
-          if (!point || point.depth < centerDepth !== near) {
-            drawing = false;
-            continue;
-          }
-          if (drawing) ctx.lineTo(point.x, point.y);
-          else ctx.moveTo(point.x, point.y);
-          drawing = true;
-        }
-        ctx.stroke();
-        ctx.restore();
-      }
-    };
-
     const drawSparkle = (x: number, y: number, size: number, color: string, alpha: number) => {
       ctx.save();
       ctx.globalAlpha = alpha;
@@ -562,20 +512,6 @@ export function UniverseScene({
       ctx.quadraticCurveTo(x + size * 0.18, y + size * 0.18, x, y + size);
       ctx.quadraticCurveTo(x - size * 0.18, y + size * 0.18, x - size, y);
       ctx.quadraticCurveTo(x - size * 0.18, y - size * 0.18, x, y - size);
-      ctx.fill();
-      ctx.restore();
-    };
-
-    const drawHeart = (x: number, y: number, size: number, color: string, alpha: number) => {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.scale(size, size);
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(0, 0.35);
-      ctx.bezierCurveTo(-0.55, -0.05, -0.4, -0.72, 0, -0.32);
-      ctx.bezierCurveTo(0.4, -0.72, 0.55, -0.05, 0, 0.35);
       ctx.fill();
       ctx.restore();
     };
@@ -644,35 +580,6 @@ export function UniverseScene({
           ctx.lineTo(x - 2, y + 8);
           ctx.stroke();
         }
-      }
-    };
-
-    const drawHalo = () => {
-      const center = projectPoint(0, 0, 0, 1, 0);
-      if (!center) return;
-      const radius = (46 * focal()) / cam.dist;
-      const halo = ctx.createRadialGradient(center.x, center.y, radius * 0.1, center.x, center.y, radius);
-      halo.addColorStop(0, "rgba(255, 226, 150, 0.16)");
-      halo.addColorStop(1, "rgba(255, 226, 150, 0)");
-      ctx.fillStyle = halo;
-      ctx.beginPath();
-      ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
-      ctx.fill();
-    };
-
-    const drawMotes = (time: number, near: boolean, centerDepth: number) => {
-      const poses = skyRef.current.poses;
-      const speed = poses.includes("fidget") ? 2.2 : poses.every((pose) => pose === "rest") ? 0.3 : 1;
-      const spin = reducedMotion.matches ? 0 : (time / 9000) * speed;
-      const quiet = poses.every((pose) => pose === "rest") ? 0.4 : 1;
-      for (const mote of motes) {
-        const angle = mote.angle + spin;
-        const point = projectPoint(Math.cos(angle) * mote.radius, mote.lift, Math.sin(angle) * mote.radius, 1, 0);
-        if (!point || point.depth < centerDepth !== near) continue;
-        const size = Math.max(1.6, (mote.size * focal()) / point.depth);
-        const alpha = (near ? 0.75 : 0.85) * quiet;
-        if (mote.heart) drawHeart(point.x, point.y, size * 1.7, mote.hue, alpha);
-        else drawSparkle(point.x, point.y, size * 1.4, mote.hue, alpha);
       }
     };
 
@@ -1199,9 +1106,6 @@ export function UniverseScene({
       ctx.clearRect(0, 0, width, height);
       drawSky(time);
       drawCosmicEvent(time);
-      drawHalo();
-      drawOrbit(time, false, centerDepth);
-      drawMotes(time, false, centerDepth);
       drawTwinLinks(twinEntries.filter((entry) => entry.depth >= centerDepth));
       drawConstellations();
       for (const entry of projected) if (entry.depth >= centerDepth) entry.paint();
@@ -1209,8 +1113,6 @@ export function UniverseScene({
       ctx = frontCtx;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
-      drawOrbit(time, true, centerDepth);
-      drawMotes(time, true, centerDepth);
       drawTwinLinks(twinEntries.filter((entry) => entry.depth < centerDepth));
       for (const entry of projected) if (entry.depth < centerDepth) entry.paint();
       for (const label of labels) drawLabel(label.x, label.y, label.text);
