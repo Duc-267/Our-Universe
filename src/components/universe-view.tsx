@@ -23,8 +23,10 @@ import { deleteMemory, type DeleteMemoryState } from "@/features/memory/actions"
 import { memoryIcon } from "@/features/memory/icons";
 import { categoryColor, STICKER_INK } from "@/features/memory/palette";
 import { createClient } from "@/lib/supabase/client";
+import { WorldDock, ZoneDrawer, type IslandZone, type WorldZone } from "./world-zones";
 import {
   UniverseScene,
+  type SceneInsets,
   type SceneCapsule,
   type SceneConstellation,
   type SceneMoon,
@@ -113,6 +115,26 @@ type Props = {
 };
 
 const initialDeleteState: DeleteMemoryState = { ok: false, error: null };
+
+// Must match .zone-drawer width and offset and the compact breakpoint in globals.css.
+const DRAWER_MAX = 432;
+const DRAWER_SHARE = 0.44;
+const DRAWER_GAP = 16;
+const COMPACT_WIDTH = 760;
+const SHEET_SHARE = 0.62;
+
+function sceneInsets(zone: WorldZone | null, viewport: { w: number; h: number } | null): SceneInsets {
+  if (!viewport) return { top: 64, right: 0, bottom: 96 };
+  const compact = viewport.w < COMPACT_WIDTH;
+  if (compact) {
+    return { top: 56, right: 0, bottom: zone ? viewport.h * SHEET_SHARE : 92 };
+  }
+  return {
+    top: 64,
+    right: zone ? Math.min(DRAWER_MAX, viewport.w * DRAWER_SHARE) + DRAWER_GAP : 0,
+    bottom: 96,
+  };
+}
 
 function HeartIcon() {
   return (
@@ -231,6 +253,32 @@ export function UniverseView({
   const [cheer, setCheer] = useState<"star" | "checkin" | null>(initialSelectedId ? "star" : null);
   const knownIds = useRef<Set<string> | null>(null);
   const seenCheckins = useRef<string | null>(null);
+  const [zone, setZone] = useState<WorldZone | null>(null);
+  const [viewport, setViewport] = useState<{ w: number; h: number } | null>(null);
+  const zoneTrigger = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const update = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const toggleZone = (next: WorldZone) => {
+    if (zone === next) {
+      closeZone();
+      return;
+    }
+    if (document.activeElement instanceof HTMLElement) zoneTrigger.current = document.activeElement;
+    setZone(next);
+  };
+
+  const closeZone = () => {
+    setZone(null);
+    const trigger = zoneTrigger.current;
+    zoneTrigger.current = null;
+    if (trigger?.isConnected) window.requestAnimationFrame(() => trigger.focus());
+  };
 
   const selectionKey = initialSelection?.id ?? null;
   // A new ?star= or ?capsule= target opens its dialog without waiting for an effect.
@@ -510,166 +558,230 @@ export function UniverseView({
     memoryIds: row.memories.map((memory) => memory.id),
   }));
 
+  const openMoment = moments.some((moment) => moment.status === "open");
+  const openQuest = quests.some((quest) => quest.status === "open");
+  const readyCapsules = capsules.filter((capsule) => capsule.canOpen && !capsule.openedAt).length;
+  const dots: Partial<Record<WorldZone, string>> = {};
+  if (openMoment) dots.pond = "a Same Moment is open";
+  if (openQuest) dots.sky = "a quest is open";
+  if (readyCapsules > 0) dots.mailbox = readyCapsules === 1 ? "a capsule is ready" : `${readyCapsules} capsules are ready`;
+  const islandZone: IslandZone | null = zone && zone !== "sky" ? zone : null;
+  const isEmpty = memories.length === 0 && capsules.length === 0;
+
   return (
-    <div className="universe-shell">
+    <div className="universe-shell" data-zone={zone ?? "none"}>
       <h1 className="sr-only">Your universe</h1>
-      <div className="universe-layout">
-        <div className="universe-stage">
-          <UniverseScene
-            stars={sceneStars}
-            capsules={sceneCapsules}
-            twins={sceneTwins}
-            moons={sceneMoons}
-            rewards={sceneRewards}
-            planets={scenePlanets}
-            dreams={sceneDreams}
-            constellations={sceneConstellations}
-            selectedId={selected?.id ?? null}
-            onSelect={setSelected}
-            sky={sky}
-            skyEvent={skyEvent}
-            bornId={bornId}
-            cheer={cheer}
-          />
-          <div className="universe-toolbar">
-            <p className={`universe-age-chip${isAnniversary ? " is-anniversary" : ""}`}>
-              <HeartIcon />
-              {ageLine(age)}
-            </p>
-            <Link className="primary-button universe-add" href="/memory/new">
-              <span aria-hidden="true">✦</span> Add a memory
-            </Link>
-            <Link className="universe-seal" href="/capsule/new">Seal a capsule</Link>
-            <Link className="universe-seal" href="/trip/new">Add a trip</Link>
-            <Link className="universe-seal" href="/constellation/new">Group stars</Link>
+      <div className="universe-stage">
+        <UniverseScene
+          stars={sceneStars}
+          capsules={sceneCapsules}
+          twins={sceneTwins}
+          moons={sceneMoons}
+          rewards={sceneRewards}
+          planets={scenePlanets}
+          dreams={sceneDreams}
+          constellations={sceneConstellations}
+          selectedId={selected?.id ?? null}
+          onSelect={setSelected}
+          sky={sky}
+          skyEvent={skyEvent}
+          bornId={bornId}
+          cheer={cheer}
+          insets={sceneInsets(zone, viewport)}
+          activeZone={islandZone}
+          mailReady={readyCapsules > 0}
+          onZone={toggleZone}
+        />
+      </div>
+
+      <div className="world-hud">
+        <button
+          type="button"
+          className={`universe-age-chip${isAnniversary ? " is-anniversary" : ""}`}
+          onClick={() => toggleZone("home")}
+        >
+          <HeartIcon />
+          {ageLine(age)}
+        </button>
+        {skyEvent && (
+          <p className="cosmic-event-banner">
+            {cosmicEventLabel(skyEvent)} in the sky today
+          </p>
+        )}
+      </div>
+
+      {isEmpty && !zone && (
+        <section className="universe-empty-overlay" aria-labelledby="universe-title">
+          <div className="universe-empty-card">
+            <TwinStarIcon />
+            <h2 id="universe-title">Your universe begins here.</h2>
+            {canInvite ? (
+              <Link className="primary-button universe-action" href="/couple/invite">Invite your partner</Link>
+            ) : (
+              <p className="universe-note">Plant a first memory and watch your sky begin to glow.</p>
+            )}
           </div>
-          {skyEvent && (
-            <p className="cosmic-event-banner">
-              {cosmicEventLabel(skyEvent)} in the sky today
-            </p>
+        </section>
+      )}
+
+      <div className="world-dock-wrap">
+        <WorldDock activeZone={zone} dots={dots} onZone={toggleZone} />
+      </div>
+
+      {zone && (
+        <ZoneDrawer zone={zone} onClose={closeZone}>
+          {zone === "pond" && (
+            <>
+              <CheckInPanel coupleId={coupleId} today={today} checkins={checkins} />
+              <SameMomentPanel
+                coupleId={coupleId}
+                userId={userId}
+                moments={moments}
+                selectedId={selected?.kind === "moment" ? selected.id : null}
+                onSelect={(id) => setSelected(id ? { kind: "moment", id } : null)}
+              />
+            </>
           )}
-          {memories.length === 0 && capsules.length === 0 && (
-            <section className="universe-empty-overlay" aria-labelledby="universe-title">
-              <div className="universe-empty-card">
-                <TwinStarIcon />
-                <h2 id="universe-title">Your universe begins here.</h2>
-                {canInvite ? (
-                  <Link className="primary-button universe-action" href="/couple/invite">Invite your partner</Link>
+          {zone === "garden" && (
+            <>
+              <Link className="primary-button zone-action" href="/memory/new">
+                <span aria-hidden="true">✦</span> Plant a memory
+              </Link>
+              <section className="zone-section" aria-labelledby="garden-memories-heading">
+                <div className="zone-section-head">
+                  <h3 id="garden-memories-heading">Our memories</h3>
+                  <span className="zone-count">{memories.length}</span>
+                </div>
+                {memories.length === 0 ? (
+                  <p className="zone-empty">Nothing planted yet. Your first memory becomes the first star.</p>
                 ) : (
-                  <p className="universe-note">A quiet place for the moments you will share.</p>
+                  <ul className="star-list">
+                    {memories.map((memory) => (
+                      <li key={memory.id}>
+                        <button
+                          type="button"
+                          className="star-option"
+                          aria-current={selected?.kind === "star" && memory.id === selected.id ? "true" : undefined}
+                          onClick={() => setSelected({ kind: "star", id: memory.id })}
+                        >
+                          <StarSticker
+                            id={memory.icon}
+                            category={memory.category}
+                            bright={memory.star?.type === "BRIGHT_STAR"}
+                          />
+                          <span className="star-option-text">
+                            <span className="star-option-title">{memory.title}</span>
+                            <span className="star-option-meta">
+                              {formatDate(memory.memoryDate)} · {categoryLabel(memory.category)}
+                              {memory.photos.length > 0 ? ` · ${memory.photos.length} ${memory.photos.length === 1 ? "photo" : "photos"}` : ""}
+                            </span>
+                          </span>
+                          {memory.photos[0]?.thumbUrl && (
+                            <img className="star-thumb" src={memory.photos[0].thumbUrl} alt="" />
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 )}
+              </section>
+              <ConstellationPanel
+                constellations={constellations}
+                selectedId={selected?.kind === "constellation" ? selected.id : null}
+                onSelect={(id) => setSelected(id ? { kind: "constellation", id } : null)}
+              />
+            </>
+          )}
+          {zone === "sky" && (
+            <>
+              <QuestPanel
+                coupleId={coupleId}
+                userId={userId}
+                quests={quests}
+                selectedId={selected?.kind === "quest" ? selected.id : null}
+                onSelect={(id) => setSelected(id ? { kind: "quest", id } : null)}
+              />
+              <TripPanel
+                trips={trips}
+                selectedId={selected?.kind === "trip" ? selected.id : null}
+                onSelect={(id) => setSelected(id ? { kind: "trip", id } : null)}
+              />
+              <DreamPanel
+                dreams={dreams}
+                selectedId={selected?.kind === "dream" ? selected.id : null}
+                onSelect={(id) => setSelected(id ? { kind: "dream", id } : null)}
+              />
+              <MilestonesPanel
+                milestones={milestones}
+                selectedId={selected?.kind === "moon" ? selected.id : null}
+                onSelect={(id) => setSelected(id ? { kind: "moon", id } : null)}
+              />
+              <CosmicEventsPanel events={cosmicEvents} />
+            </>
+          )}
+          {zone === "home" && (
+            <section className="home-card" aria-label="Our days">
+              <p className="home-days">
+                <span className="home-days-number">{age.daysTogether.toLocaleString("en-US")}</span>
+                <span className="home-days-label">{age.daysTogether === 1 ? "day together" : "days together"}</span>
+              </p>
+              <p className="home-next">
+                {!age.nextAnniversary
+                  ? "Your story is just starting."
+                  : age.nextAnniversary.daysAway === 0
+                    ? `Happy anniversary — ${age.nextAnniversary.number} ${age.nextAnniversary.number === 1 ? "year" : "years"} today.`
+                    : `Anniversary ${age.nextAnniversary.number} in ${age.nextAnniversary.daysAway} ${age.nextAnniversary.daysAway === 1 ? "day" : "days"}.`}
+              </p>
+              <div className="home-links">
+                {canInvite && (
+                  <Link className="primary-button zone-action" href="/couple/invite">Invite your partner</Link>
+                )}
+                <Link className="zone-link" href="/couple/settings">Couple settings</Link>
               </div>
             </section>
           )}
-        </div>
-        <div className="universe-side">
-          <CheckInPanel coupleId={coupleId} today={today} checkins={checkins} />
-          <SameMomentPanel
-            coupleId={coupleId}
-            userId={userId}
-            moments={moments}
-            selectedId={selected?.kind === "moment" ? selected.id : null}
-            onSelect={(id) => setSelected(id ? { kind: "moment", id } : null)}
-          />
-          <QuestPanel
-            coupleId={coupleId}
-            userId={userId}
-            quests={quests}
-            selectedId={selected?.kind === "quest" ? selected.id : null}
-            onSelect={(id) => setSelected(id ? { kind: "quest", id } : null)}
-          />
-          <TripPanel
-            trips={trips}
-            selectedId={selected?.kind === "trip" ? selected.id : null}
-            onSelect={(id) => setSelected(id ? { kind: "trip", id } : null)}
-          />
-          <DreamPanel
-            dreams={dreams}
-            selectedId={selected?.kind === "dream" ? selected.id : null}
-            onSelect={(id) => setSelected(id ? { kind: "dream", id } : null)}
-          />
-          <ConstellationPanel
-            constellations={constellations}
-            selectedId={selected?.kind === "constellation" ? selected.id : null}
-            onSelect={(id) => setSelected(id ? { kind: "constellation", id } : null)}
-          />
-          <MilestonesPanel
-            milestones={milestones}
-            selectedId={selected?.kind === "moon" ? selected.id : null}
-            onSelect={(id) => setSelected(id ? { kind: "moon", id } : null)}
-          />
-          <CosmicEventsPanel events={cosmicEvents} />
-        </div>
-      </div>
-      {memories.length > 0 && (
-        <section className="universe-list" aria-labelledby="universe-stars-heading">
-          <div className="universe-list-head">
-            <h2 id="universe-stars-heading">Our stars</h2>
-            <p className="universe-count">
-              {memories.length === 1 ? "1 memory" : `${memories.length} memories`} shining in your universe
-            </p>
-          </div>
-          <ul className="star-list">
-            {memories.map((memory) => (
-              <li key={memory.id}>
-                <button
-                  type="button"
-                  className="star-option"
-                  aria-current={selected?.kind === "star" && memory.id === selected.id ? "true" : undefined}
-                  onClick={() => setSelected({ kind: "star", id: memory.id })}
-                >
-                  <StarSticker
-                    id={memory.icon}
-                    category={memory.category}
-                    bright={memory.star?.type === "BRIGHT_STAR"}
-                  />
-                  <span className="star-option-text">
-                    <span className="star-option-title">{memory.title}</span>
-                    <span className="star-option-meta">
-                      {formatDate(memory.memoryDate)} · {categoryLabel(memory.category)}
-                      {memory.star && memory.star.gravity > 0 ? ` · gravity ${memory.star.gravity}` : ""}
-                      {memory.photos.length > 0 ? ` · ${memory.photos.length} ${memory.photos.length === 1 ? "photo" : "photos"}` : ""}
-                    </span>
-                  </span>
-                  {memory.photos[0]?.thumbUrl && (
-                    <img className="star-thumb" src={memory.photos[0].thumbUrl} alt="" />
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
+          {zone === "mailbox" && (
+            <>
+              <Link className="primary-button zone-action" href="/capsule/new">
+                <span aria-hidden="true">✉</span> Seal a capsule
+              </Link>
+              <section className="zone-section" aria-labelledby="mailbox-capsules-heading">
+                <div className="zone-section-head">
+                  <h3 id="mailbox-capsules-heading">Capsules</h3>
+                  <span className="zone-count">{capsules.length}</span>
+                </div>
+                {capsules.length === 0 ? (
+                  <p className="zone-empty">No capsules yet. A sealed message waits here until its day.</p>
+                ) : (
+                  <ul className="star-list">
+                    {capsules.map((capsule) => (
+                      <li key={capsule.id}>
+                        <button
+                          type="button"
+                          className="star-option"
+                          aria-current={selected?.kind === "capsule" && capsule.id === selected.id ? "true" : undefined}
+                          onClick={() => setSelected({ kind: "capsule", id: capsule.id })}
+                        >
+                          <span className={`capsule-mark is-${capsule.openedAt ? "open" : capsule.canOpen ? "ready" : "locked"}`} aria-hidden="true" />
+                          <span className="star-option-text">
+                            <span className="star-option-title">{capsuleLabel(capsule)}</span>
+                            <span className="star-option-meta">
+                              {capsule.openedAt ? `Opened ${formatDate(capsule.openedAt.slice(0, 10))}` : `Unlocks ${formatDate(capsule.unlockDate)}`}
+                              {" · "}sealed by {capsule.creatorName}
+                            </span>
+                          </span>
+                          {capsule.image?.thumbUrl && <img className="star-thumb" src={capsule.image.thumbUrl} alt="" />}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </>
+          )}
+        </ZoneDrawer>
       )}
-      {capsules.length > 0 && (
-        <section className="universe-list" aria-labelledby="universe-capsules-heading">
-          <div className="universe-list-head">
-            <h2 id="universe-capsules-heading">Capsules</h2>
-            <p className="universe-count">Messages waiting in the distance</p>
-          </div>
-          <ul className="star-list">
-            {capsules.map((capsule) => (
-              <li key={capsule.id}>
-                <button
-                  type="button"
-                  className="star-option"
-                  aria-current={selected?.kind === "capsule" && capsule.id === selected.id ? "true" : undefined}
-                  onClick={() => setSelected({ kind: "capsule", id: capsule.id })}
-                >
-                  <span className={`capsule-mark is-${capsule.openedAt ? "open" : capsule.canOpen ? "ready" : "locked"}`} aria-hidden="true" />
-                  <span className="star-option-text">
-                    <span className="star-option-title">{capsuleLabel(capsule)}</span>
-                    <span className="star-option-meta">
-                      {capsule.openedAt ? `Opened ${formatDate(capsule.openedAt.slice(0, 10))}` : `Unlocks ${formatDate(capsule.unlockDate)}`}
-                      {" · "}sealed by {capsule.creatorName}
-                    </span>
-                  </span>
-                  {capsule.image?.thumbUrl && <img className="star-thumb" src={capsule.image.thumbUrl} alt="" />}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+
       {selectedMemory && <MemoryDialog memory={selectedMemory} onClose={closeDetail} />}
       {selectedCapsule && <CapsuleDialog capsule={selectedCapsule} onClose={closeDetail} />}
       {selectedMoment && <SameMomentDialog moment={selectedMoment} onClose={closeDetail} />}

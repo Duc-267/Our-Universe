@@ -4,6 +4,8 @@ import { useEffect, useRef } from "react";
 import { SKY_TINT, type CoupleSky, type DuckPose } from "@/features/checkin/weather";
 import { paintIconSticker } from "@/features/memory/icons";
 import { categoryColor, STICKER_INK } from "@/features/memory/palette";
+import { POND_CENTER, WorldIsland } from "./world-island";
+import type { IslandZone } from "./world-zones";
 
 export type SceneStar = {
   memoryId: string;
@@ -117,18 +119,33 @@ type Props = {
   skyEvent: "aurora" | "meteor_shower" | "planet_bloom" | null;
   bornId: string | null;
   cheer: "star" | "checkin" | null;
+  insets: SceneInsets;
+  activeZone: IslandZone | null;
+  mailReady: boolean;
+  onZone: (zone: IslandZone) => void;
 };
 
-const MIN_DIST = 115;
-const MAX_DIST = 320;
-const START_DIST = 175;
+export type SceneInsets = { top: number; right: number; bottom: number };
+
+const MIN_DIST = 230;
+const MAX_DIST = 520;
+const START_DIST = 300;
 const START_YAW = 0.65;
 const START_PITCH = -0.22;
 const CREAM = "#fff6e6";
+const ISLAND_UNITS = 190;
+// Stored orbits (radius 45–80) sit inside the island's footprint; widening them on screen rings the sky around it.
+const ORBIT_SPREAD = 1.9;
+const ORBIT_LIFT = 1.3;
+// Dreams already orbit far out (radius 128–150); full spread would carry the near ones behind the camera.
+const DREAM_SPREAD = 1.25;
+// The island camera sits farther back than the original sky view; this keeps objects at their old on-screen size.
+const SKY_SIZE = 1.45;
+const PITCH_MIN = -0.75;
+const PITCH_MAX = 0.4;
 
 type BackgroundStar = { x: number; y: number; z: number; size: number; twinkle: boolean; phase: number };
 type Cloud = { x: number; y: number; scale: number; depth: number; puffs: [number, number, number][] };
-type Mote = { angle: number; radius: number; lift: number; heart: boolean; hue: string; size: number };
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -166,22 +183,6 @@ function makeClouds(): Cloud[] {
     { x: 0.86, y: 0.58, scale: 52, depth: 0.45, puffs: shapes[2] },
     { x: 0.32, y: 0.78, scale: 40, depth: 0.3, puffs: shapes[1] },
   ];
-}
-
-function makeMotes(): Mote[] {
-  const motes: Mote[] = [];
-  for (let i = 0; i < 22; i += 1) {
-    const heart = i % 3 === 0;
-    motes.push({
-      angle: (i / 22) * Math.PI * 2,
-      radius: 40 + (i % 4) * 5,
-      lift: Math.sin(i * 1.7) * 14,
-      heart,
-      hue: heart ? "#ff8fab" : i % 2 === 0 ? "#ffd23a" : CREAM,
-      size: heart ? 3.4 : 1.4 + (i % 3) * 0.4,
-    });
-  }
-  return motes;
 }
 
 function paintBackdrop(target: HTMLCanvasElement, width: number, height: number) {
@@ -247,6 +248,10 @@ export function UniverseScene({
   skyEvent,
   bornId,
   cheer,
+  insets,
+  activeZone,
+  mailReady,
+  onZone,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frontRef = useRef<HTMLCanvasElement>(null);
@@ -264,7 +269,8 @@ export function UniverseScene({
   const eventRef = useRef(skyEvent);
   const bornRef = useRef(bornId);
   const cheerRef = useRef(cheer);
-  const duckRef = useRef<HTMLDivElement>(null);
+  const insetsRef = useRef(insets);
+  const islandRef = useRef<HTMLDivElement>(null);
   const duckMotionRef = useRef<HTMLDivElement>(null);
   const apiRef = useRef<{ zoomIn: () => void; zoomOut: () => void; reset: () => void } | null>(
     null,
@@ -284,6 +290,7 @@ export function UniverseScene({
     eventRef.current = skyEvent;
     bornRef.current = bornId;
     cheerRef.current = cheer;
+    insetsRef.current = insets;
   });
 
   useEffect(() => {
@@ -302,7 +309,6 @@ export function UniverseScene({
     const cam = { yaw: START_YAW, pitch: START_PITCH, dist: START_DIST };
     const background = makeBackgroundStars(200);
     const clouds = makeClouds();
-    const motes = makeMotes();
     const backdrop = document.createElement("canvas");
     const moon = makeMoon();
     const pointers = new Map<number, { x: number; y: number }>();
@@ -312,6 +318,7 @@ export function UniverseScene({
     let hoverId: string | null = null;
     let width = 1;
     let height = 1;
+    const view = { cx: 0, cy: 0, size: 1, ready: false };
     let dpr = 1;
     let raf = 0;
     let lastTime = 0;
@@ -342,7 +349,23 @@ export function UniverseScene({
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(container);
 
-    const focal = () => Math.min(width, height) * 1.15;
+    // The free area left beside an open drawer decides where the island sits and how large the sky is.
+    const updateView = (dt: number) => {
+      const { top, right, bottom } = insetsRef.current;
+      const freeW = Math.max(160, width - right);
+      const freeH = Math.max(160, height - top - bottom);
+      const target = { cx: freeW / 2, cy: top + freeH * 0.52, size: Math.min(freeW, freeH * 1.12) };
+      if (!view.ready || reducedMotion.matches || dt === 0) {
+        Object.assign(view, target, { ready: true });
+        return;
+      }
+      const ease = 1 - Math.exp(-dt * 7);
+      view.cx += (target.cx - view.cx) * ease;
+      view.cy += (target.cy - view.cy) * ease;
+      view.size += (target.size - view.size) * ease;
+    };
+
+    const focal = () => view.size * 1.15;
 
     const projectPoint = (px: number, py: number, pz: number, yawMul: number, extraDist: number) => {
       const yaw = cam.yaw * yawMul;
@@ -359,19 +382,23 @@ export function UniverseScene({
       if (depth < 6) return null;
       const f = focal();
       return {
-        x: width / 2 + (f * x1) / depth,
-        y: height / 2 - (f * y2) / depth,
+        x: view.cx + (f * x1) / depth,
+        y: view.cy - (f * y2) / depth,
         depth,
       };
     };
 
+    const projectSky = (px: number, py: number, pz: number, spread = ORBIT_SPREAD) =>
+      projectPoint(px * spread, py * ORBIT_LIFT, pz * spread, 1, 0);
+
+    const skyScale = (depth: number) => (focal() / depth) * SKY_SIZE;
+
     const gravitySize = (gravity: number) => (gravity > 0 ? 0.84 + (gravity / 100) * 0.52 : 1);
 
     const projectStar = (star: SceneStar) => {
-      const point = projectPoint(star.positionX, star.positionY, star.positionZ, 1, 0);
+      const point = projectSky(star.positionX, star.positionY, star.positionZ);
       if (!point) return null;
-      const f = focal();
-      const base = Math.max(15, star.scale * gravitySize(star.gravity) * 4.8 * (f / point.depth));
+      const base = Math.max(15, star.scale * gravitySize(star.gravity) * 4.8 * skyScale(point.depth));
       return {
         star,
         x: point.x,
@@ -382,44 +409,44 @@ export function UniverseScene({
     };
 
     const projectCapsule = (capsule: SceneCapsule) => {
-      const point = projectPoint(capsule.positionX, capsule.positionY, capsule.positionZ, 1, 0);
+      const point = projectSky(capsule.positionX, capsule.positionY, capsule.positionZ);
       if (!point) return null;
-      const base = Math.max(16, capsule.scale * 5.2 * (focal() / point.depth));
+      const base = Math.max(16, capsule.scale * 5.2 * skyScale(point.depth));
       return { capsule, x: point.x, y: point.y, depth: point.depth, r: base };
     };
 
     const projectTwin = (twin: SceneTwin) => {
-      const point = projectPoint(twin.positionX, twin.positionY, twin.positionZ, 1, 0);
+      const point = projectSky(twin.positionX, twin.positionY, twin.positionZ);
       if (!point) return null;
-      const base = Math.max(14, twin.scale * 4.6 * (focal() / point.depth));
+      const base = Math.max(14, twin.scale * 4.6 * skyScale(point.depth));
       return { twin, x: point.x, y: point.y, depth: point.depth, r: base };
     };
 
     const projectMoon = (moon: SceneMoon) => {
-      const point = projectPoint(moon.positionX, moon.positionY, moon.positionZ, 1, 0);
+      const point = projectSky(moon.positionX, moon.positionY, moon.positionZ);
       if (!point) return null;
-      const base = Math.max(18, moon.scale * 5.4 * (focal() / point.depth));
+      const base = Math.max(18, moon.scale * 5.4 * skyScale(point.depth));
       return { moon, x: point.x, y: point.y, depth: point.depth, r: base };
     };
 
     const projectReward = (reward: SceneReward) => {
-      const point = projectPoint(reward.positionX, reward.positionY, reward.positionZ, 1, 0);
+      const point = projectSky(reward.positionX, reward.positionY, reward.positionZ);
       if (!point) return null;
-      const base = Math.max(16, reward.scale * 5.0 * (focal() / point.depth));
+      const base = Math.max(16, reward.scale * 5.0 * skyScale(point.depth));
       return { reward, x: point.x, y: point.y, depth: point.depth, r: base };
     };
 
     const projectPlanet = (planet: ScenePlanet) => {
-      const point = projectPoint(planet.positionX, planet.positionY, planet.positionZ, 1, 0);
+      const point = projectSky(planet.positionX, planet.positionY, planet.positionZ);
       if (!point) return null;
-      const base = Math.max(22, planet.scale * 6.2 * (focal() / point.depth));
+      const base = Math.max(22, planet.scale * 6.2 * skyScale(point.depth));
       return { planet, x: point.x, y: point.y, depth: point.depth, r: base };
     };
 
     const projectDream = (dream: SceneDream) => {
-      const point = projectPoint(dream.positionX, dream.positionY, dream.positionZ, 1, 0);
+      const point = projectSky(dream.positionX, dream.positionY, dream.positionZ, DREAM_SPREAD);
       if (!point) return null;
-      const base = Math.max(7, dream.scale * 4.2 * (focal() / point.depth));
+      const base = Math.max(7, dream.scale * 4.2 * skyScale(point.depth));
       return { dream, x: point.x, y: point.y, depth: point.depth, r: base };
     };
 
@@ -520,38 +547,6 @@ export function UniverseScene({
       return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
     };
 
-    const drawOrbit = (time: number, near: boolean, centerDepth: number) => {
-      const spin = reducedMotion.matches ? 0 : time / 30000;
-      const rings = [
-        { radius: 50, tilt: 0.28, alpha: 0.5, dash: 0 },
-        { radius: 64, tilt: -0.18, alpha: 0.28, dash: 1 },
-      ];
-      for (const ring of rings) {
-        ctx.save();
-        ctx.lineCap = "round";
-        ctx.strokeStyle = `rgba(255, 241, 194, ${near ? ring.alpha : ring.alpha * 0.6})`;
-        ctx.lineWidth = near ? 2.2 : 1.6;
-        if (ring.dash) ctx.setLineDash([2, 9]);
-        ctx.beginPath();
-        let drawing = false;
-        for (let i = 0; i <= 96; i += 1) {
-          const angle = (i / 96) * Math.PI * 2 + spin;
-          const px = Math.cos(angle) * ring.radius;
-          const pz = Math.sin(angle) * ring.radius;
-          const point = projectPoint(px, Math.sin(angle) * ring.radius * ring.tilt, pz, 1, 0);
-          if (!point || point.depth < centerDepth !== near) {
-            drawing = false;
-            continue;
-          }
-          if (drawing) ctx.lineTo(point.x, point.y);
-          else ctx.moveTo(point.x, point.y);
-          drawing = true;
-        }
-        ctx.stroke();
-        ctx.restore();
-      }
-    };
-
     const drawSparkle = (x: number, y: number, size: number, color: string, alpha: number) => {
       ctx.save();
       ctx.globalAlpha = alpha;
@@ -562,20 +557,6 @@ export function UniverseScene({
       ctx.quadraticCurveTo(x + size * 0.18, y + size * 0.18, x, y + size);
       ctx.quadraticCurveTo(x - size * 0.18, y + size * 0.18, x - size, y);
       ctx.quadraticCurveTo(x - size * 0.18, y - size * 0.18, x, y - size);
-      ctx.fill();
-      ctx.restore();
-    };
-
-    const drawHeart = (x: number, y: number, size: number, color: string, alpha: number) => {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.scale(size, size);
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(0, 0.35);
-      ctx.bezierCurveTo(-0.55, -0.05, -0.4, -0.72, 0, -0.32);
-      ctx.bezierCurveTo(0.4, -0.72, 0.55, -0.05, 0, 0.35);
       ctx.fill();
       ctx.restore();
     };
@@ -606,9 +587,10 @@ export function UniverseScene({
         }
       }
 
-      const moonSize = Math.min(width, height) * 0.2;
-      const moonX = width * 0.84 - Math.sin(cam.yaw) * 24;
-      const moonY = height * 0.18 + cam.pitch * 18;
+      const moonSize = view.size * 0.2;
+      const { top, right } = insetsRef.current;
+      const moonX = Math.min(view.cx + view.size * 0.58, width - right - moonSize * 0.7) - Math.sin(cam.yaw) * 24;
+      const moonY = top + moonSize * 0.75 + cam.pitch * 18;
       ctx.drawImage(moon, moonX - moonSize / 2, moonY - moonSize / 2, moonSize, moonSize);
 
       const windy = skyRef.current.poses.includes("fidget") ? 3 : 1;
@@ -644,35 +626,6 @@ export function UniverseScene({
           ctx.lineTo(x - 2, y + 8);
           ctx.stroke();
         }
-      }
-    };
-
-    const drawHalo = () => {
-      const center = projectPoint(0, 0, 0, 1, 0);
-      if (!center) return;
-      const radius = (46 * focal()) / cam.dist;
-      const halo = ctx.createRadialGradient(center.x, center.y, radius * 0.1, center.x, center.y, radius);
-      halo.addColorStop(0, "rgba(255, 226, 150, 0.16)");
-      halo.addColorStop(1, "rgba(255, 226, 150, 0)");
-      ctx.fillStyle = halo;
-      ctx.beginPath();
-      ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
-      ctx.fill();
-    };
-
-    const drawMotes = (time: number, near: boolean, centerDepth: number) => {
-      const poses = skyRef.current.poses;
-      const speed = poses.includes("fidget") ? 2.2 : poses.every((pose) => pose === "rest") ? 0.3 : 1;
-      const spin = reducedMotion.matches ? 0 : (time / 9000) * speed;
-      const quiet = poses.every((pose) => pose === "rest") ? 0.4 : 1;
-      for (const mote of motes) {
-        const angle = mote.angle + spin;
-        const point = projectPoint(Math.cos(angle) * mote.radius, mote.lift, Math.sin(angle) * mote.radius, 1, 0);
-        if (!point || point.depth < centerDepth !== near) continue;
-        const size = Math.max(1.6, (mote.size * focal()) / point.depth);
-        const alpha = (near ? 0.75 : 0.85) * quiet;
-        if (mote.heart) drawHeart(point.x, point.y, size * 1.7, mote.hue, alpha);
-        else drawSparkle(point.x, point.y, size * 1.4, mote.hue, alpha);
       }
     };
 
@@ -1128,8 +1081,8 @@ export function UniverseScene({
       ctx.restore();
     };
 
-    const placeDuck = (time: number) => {
-      const node = duckRef.current;
+    const placeIsland = (time: number) => {
+      const node = islandRef.current;
       const motion = duckMotionRef.current;
       const anchor = projectPoint(0, 0, 0, 1, 0);
       if (!node || !motion || !anchor) return;
@@ -1143,9 +1096,9 @@ export function UniverseScene({
         cheerStamp = time;
       }
       const cheering = Boolean(cheerKind) && time - cheerStamp < 1400 && !reduced;
-      const widthPx = (62 * focal()) / cam.dist;
+      const widthPx = Math.min((ISLAND_UNITS * focal()) / cam.dist, Math.max(width, height) * 1.1);
       node.style.width = `${widthPx}px`;
-      node.style.transform = `translate(${anchor.x}px, ${anchor.y}px) translate(-52%, -62%)`;
+      node.style.transform = `translate(${anchor.x}px, ${anchor.y}px) translate(-${POND_CENTER.x * 100}%, -${POND_CENTER.y * 100}%)`;
       node.style.visibility = "visible";
       motion.dataset.pose = reduced ? "still" : pose;
       motion.dataset.cheer = cheering && cheerKind ? cheerKind : "";
@@ -1157,6 +1110,7 @@ export function UniverseScene({
       if (!reducedMotion.matches && time - lastInteraction > 4000) {
         cam.yaw += dt * 0.05;
       }
+      updateView(dt);
       if (bornRef.current !== bornKey) {
         bornKey = bornRef.current;
         bornStamp = time;
@@ -1199,9 +1153,6 @@ export function UniverseScene({
       ctx.clearRect(0, 0, width, height);
       drawSky(time);
       drawCosmicEvent(time);
-      drawHalo();
-      drawOrbit(time, false, centerDepth);
-      drawMotes(time, false, centerDepth);
       drawTwinLinks(twinEntries.filter((entry) => entry.depth >= centerDepth));
       drawConstellations();
       for (const entry of projected) if (entry.depth >= centerDepth) entry.paint();
@@ -1209,12 +1160,10 @@ export function UniverseScene({
       ctx = frontCtx;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
-      drawOrbit(time, true, centerDepth);
-      drawMotes(time, true, centerDepth);
       drawTwinLinks(twinEntries.filter((entry) => entry.depth < centerDepth));
       for (const entry of projected) if (entry.depth < centerDepth) entry.paint();
       for (const label of labels) drawLabel(label.x, label.y, label.text);
-      placeDuck(time);
+      placeIsland(time);
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
@@ -1259,7 +1208,7 @@ export function UniverseScene({
       }
       dragStart.moved += Math.abs(point.x - previous.x) + Math.abs(point.y - previous.y);
       cam.yaw += (point.x - previous.x) * 0.006;
-      cam.pitch = clamp(cam.pitch + (point.y - previous.y) * 0.005, -1.25, 1.25);
+      cam.pitch = clamp(cam.pitch + (point.y - previous.y) * 0.005, PITCH_MIN, PITCH_MAX);
     };
 
     const onPointerUp = (event: PointerEvent) => {
@@ -1287,8 +1236,8 @@ export function UniverseScene({
       let handled = true;
       if (event.key === "ArrowLeft") cam.yaw -= 0.12;
       else if (event.key === "ArrowRight") cam.yaw += 0.12;
-      else if (event.key === "ArrowUp") cam.pitch = clamp(cam.pitch + 0.1, -1.25, 1.25);
-      else if (event.key === "ArrowDown") cam.pitch = clamp(cam.pitch - 0.1, -1.25, 1.25);
+      else if (event.key === "ArrowUp") cam.pitch = clamp(cam.pitch + 0.1, PITCH_MIN, PITCH_MAX);
+      else if (event.key === "ArrowDown") cam.pitch = clamp(cam.pitch - 0.1, PITCH_MIN, PITCH_MAX);
       else if (event.key === "+" || event.key === "=")
         cam.dist = clamp(cam.dist - 18, MIN_DIST, MAX_DIST);
       else if (event.key === "-" || event.key === "_")
@@ -1346,82 +1295,94 @@ export function UniverseScene({
         ref={canvasRef}
         tabIndex={0}
         role="img"
-        aria-label="Universe scene with your duck, memory stars, and capsules. Arrow keys rotate the view, plus and minus zoom, and the lists below open each memory or capsule."
+        aria-label="Your world: the duck's island floating in a sky of memory stars, moons, and planets. Arrow keys rotate the sky, plus and minus zoom, and the zone buttons open lists of everything here."
       />
       <canvas ref={frontRef} className="universe-front" aria-hidden="true" />
-      <div ref={duckRef} className="universe-mascot" style={{ visibility: "hidden" }}>
-        <div ref={duckMotionRef} className="duck-motion" data-pose="look" data-cheer="">
-          <svg className="duck-art" viewBox="0 0 240 200" aria-hidden="true">
-            <defs>
-              <linearGradient id="duck-body-shade" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#ffe04f" />
-                <stop offset="0.6" stopColor="#f9c62a" />
-                <stop offset="1" stopColor="#e39a18" />
-              </linearGradient>
-              <radialGradient id="duck-head-shade" cx="0.38" cy="0.32" r="0.75">
-                <stop offset="0" stopColor="#ffec70" />
-                <stop offset="0.55" stopColor="#fcd232" />
-                <stop offset="1" stopColor="#eaa91c" />
-              </radialGradient>
-              <linearGradient id="duck-wing-shade" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stopColor="#ffe866" />
-                <stop offset="1" stopColor="#f7bf1f" />
-              </linearGradient>
-              <linearGradient id="duck-beak-shade" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#ffa23a" />
-                <stop offset="1" stopColor="#f2741a" />
-              </linearGradient>
-            </defs>
-            <g className="duck-pond">
-              <ellipse className="duck-water" cx="122" cy="174" rx="94" ry="20" />
-              <ellipse className="duck-water-light" cx="122" cy="170" rx="70" ry="11" />
-              <path className="duck-ripple" d="M50 167c5-6 12-9 20-10" />
-              <path className="duck-ripple duck-ripple-late" d="M46 178c7 3 14 4 22 3" />
-              <path className="duck-ripple" d="M186 178c8-1 14-3 20-7" />
-            </g>
-            <g className="duck-bob">
-              <path
-                className="duck-body"
-                d="M178 116c14 20 6 54-34 60l-54 0c-34 0-52-20-50-46 1-14 3-28-6-46 16 0 30 10 38 22 20-12 52-14 76-6z"
-              />
-              <path className="duck-belly-shine" d="M150 160c10-4 18-12 20-22" />
-              <g className="duck-wing">
-                <path
-                  className="duck-wing-shape"
-                  d="M82 122c10-16 40-18 52 0 7 12-1 30-22 32-12 1-22-2-28-8-6 2-12-2-11-8-6-2-7-10 1-13-3-2-1-3 8-3z"
-                />
-                <path className="duck-line" d="M90 138c8 3 18 2 26-3" />
-                <path className="duck-line" d="M94 128c9 2 18 1 26-4" />
-              </g>
-              <g className="duck-head">
-                <circle className="duck-head-shape" cx="150" cy="78" r="44" />
-                <ellipse className="duck-head-shine" cx="130" cy="52" rx="10" ry="6" transform="rotate(-28 130 52)" />
-                <ellipse className="duck-blush" cx="128" cy="94" rx="9" ry="6" />
-                <ellipse className="duck-blush" cx="176" cy="94" rx="6" ry="4.5" />
-                <path className="duck-brow duck-brow-near" d="M131 57c6-5 13-5 18-1" />
-                <path className="duck-brow duck-brow-far" d="M164 55c5-4 11-4 15 0" />
-                <path className="duck-tear" d="M134 88c-3 5-4 8-1 10 3 2 6-1 5-4-1-2-2-4-4-6z" />
-                <g className="duck-eye">
-                  <ellipse cx="140" cy="74" rx="8.5" ry="10.5" />
-                  <circle className="duck-shine" cx="143" cy="69" r="3.4" />
-                  <circle className="duck-shine" cx="137.5" cy="79" r="1.5" />
-                  <ellipse cx="171" cy="72" rx="7.5" ry="9.5" />
-                  <circle className="duck-shine" cx="173.5" cy="67.5" r="3" />
-                  <circle className="duck-shine" cx="168.5" cy="76.5" r="1.3" />
+      <div ref={islandRef} className="world-island-anchor" style={{ visibility: "hidden" }}>
+        <WorldIsland activeZone={activeZone} mailReady={mailReady} onZone={onZone}>
+          <div
+            className="universe-mascot"
+            style={{ left: `${POND_CENTER.x * 100}%`, top: `${POND_CENTER.y * 100}%` }}
+          >
+            <div ref={duckMotionRef} className="duck-motion" data-pose="look" data-cheer="">
+              <svg className="duck-art" viewBox="0 0 240 200" aria-hidden="true">
+                <defs>
+                  <linearGradient id="duck-body-shade" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor="#ffe04f" />
+                    <stop offset="0.6" stopColor="#f9c62a" />
+                    <stop offset="1" stopColor="#e39a18" />
+                  </linearGradient>
+                  <radialGradient id="duck-head-shade" cx="0.38" cy="0.32" r="0.75">
+                    <stop offset="0" stopColor="#ffec70" />
+                    <stop offset="0.55" stopColor="#fcd232" />
+                    <stop offset="1" stopColor="#eaa91c" />
+                  </radialGradient>
+                  <linearGradient id="duck-wing-shade" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stopColor="#ffe866" />
+                    <stop offset="1" stopColor="#f7bf1f" />
+                  </linearGradient>
+                  <linearGradient id="duck-beak-shade" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor="#ffa23a" />
+                    <stop offset="1" stopColor="#f2741a" />
+                  </linearGradient>
+                </defs>
+                <g className="duck-pond">
+                  <ellipse className="duck-water" cx="122" cy="174" rx="94" ry="20" />
+                  <ellipse className="duck-water-light" cx="122" cy="170" rx="70" ry="11" />
+                  <path className="duck-ripple" d="M50 167c5-6 12-9 20-10" />
+                  <path className="duck-ripple duck-ripple-late" d="M46 178c7 3 14 4 22 3" />
+                  <path className="duck-ripple" d="M186 178c8-1 14-3 20-7" />
                 </g>
-                <path className="duck-shut" d="M132 76c5 5 12 5 17 0M164 74c4 4 10 4 14 0" />
-                <path className="duck-beak" d="M174 84c14-11 38-11 52 2-9 13-34 17-52 10-6-4-6-8 0-12z" />
-                <path className="duck-beak-line" d="M180 92c12 3 26 2 40-5" />
-              </g>
-            </g>
-          </svg>
-          <span className="duck-heart" aria-hidden="true">♥</span>
-        </div>
+                <g className="duck-bob">
+                  <path
+                    className="duck-body"
+                    d="M178 116c14 20 6 54-34 60l-54 0c-34 0-52-20-50-46 1-14 3-28-6-46 16 0 30 10 38 22 20-12 52-14 76-6z"
+                  />
+                  <path className="duck-belly-shine" d="M150 160c10-4 18-12 20-22" />
+                  <g className="duck-wing">
+                    <path
+                      className="duck-wing-shape"
+                      d="M82 122c10-16 40-18 52 0 7 12-1 30-22 32-12 1-22-2-28-8-6 2-12-2-11-8-6-2-7-10 1-13-3-2-1-3 8-3z"
+                    />
+                    <path className="duck-line" d="M90 138c8 3 18 2 26-3" />
+                    <path className="duck-line" d="M94 128c9 2 18 1 26-4" />
+                  </g>
+                  <g className="duck-head">
+                    <circle className="duck-head-shape" cx="150" cy="78" r="44" />
+                    <ellipse className="duck-head-shine" cx="130" cy="52" rx="10" ry="6" transform="rotate(-28 130 52)" />
+                    <ellipse className="duck-blush" cx="128" cy="94" rx="9" ry="6" />
+                    <ellipse className="duck-blush" cx="176" cy="94" rx="6" ry="4.5" />
+                    <path className="duck-brow duck-brow-near" d="M131 57c6-5 13-5 18-1" />
+                    <path className="duck-brow duck-brow-far" d="M164 55c5-4 11-4 15 0" />
+                    <path className="duck-tear" d="M134 88c-3 5-4 8-1 10 3 2 6-1 5-4-1-2-2-4-4-6z" />
+                    <g className="duck-eye">
+                      <ellipse cx="140" cy="74" rx="8.5" ry="10.5" />
+                      <circle className="duck-shine" cx="143" cy="69" r="3.4" />
+                      <circle className="duck-shine" cx="137.5" cy="79" r="1.5" />
+                      <ellipse cx="171" cy="72" rx="7.5" ry="9.5" />
+                      <circle className="duck-shine" cx="173.5" cy="67.5" r="3" />
+                      <circle className="duck-shine" cx="168.5" cy="76.5" r="1.3" />
+                    </g>
+                    <path className="duck-shut" d="M132 76c5 5 12 5 17 0M164 74c4 4 10 4 14 0" />
+                    <path className="duck-beak" d="M174 84c14-11 38-11 52 2-9 13-34 17-52 10-6-4-6-8 0-12z" />
+                    <path className="duck-beak-line" d="M180 92c12 3 26 2 40-5" />
+                  </g>
+                </g>
+              </svg>
+              <span className="duck-heart" aria-hidden="true">♥</span>
+            </div>
+          </div>
+        </WorldIsland>
       </div>
       <div className="scene-controls">
         <button type="button" aria-label="Zoom in" onClick={() => apiRef.current?.zoomIn()}>+</button>
         <button type="button" aria-label="Zoom out" onClick={() => apiRef.current?.zoomOut()}>−</button>
-        <button type="button" onClick={() => apiRef.current?.reset()}>Reset view</button>
+        <button type="button" aria-label="Reset view" onClick={() => apiRef.current?.reset()}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 12a7 7 0 1 0 2.1-5" />
+            <path d="M5 4v4h4" />
+          </svg>
+        </button>
       </div>
     </div>
   );
